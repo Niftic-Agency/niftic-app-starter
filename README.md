@@ -33,12 +33,13 @@ warnings before anything is written.
 
 ## Status
 
-| Milestone | Scope                                             | State       |
-| --------- | ------------------------------------------------- | ----------- |
-| M0        | Base app + configure engine + turso data/host     | **done**    |
-| M1        | Better Auth, email, R2, admin, `notes`, seed, e2e | next        |
-| M2–M5     | Postgres · SQLite+Litestream · Static · Supabase  | not started |
-| M6        | Claude skill, docs, bootstrap round-trip          | not started |
+| Milestone | Scope                                            | State       |
+| --------- | ------------------------------------------------ | ----------- |
+| M0        | Base app + configure engine + turso data/host    | **done**    |
+| M1        | Email module (`sendEmail`, templates, dry run)   | **done**    |
+| M1        | Better Auth, R2, admin, `notes`, seed, e2e       | next        |
+| M2–M5     | Postgres · SQLite+Litestream · Static · Supabase | not started |
+| M6        | Claude skill, docs, bootstrap round-trip         | not started |
 
 Only the `_m0-turso-minimal` preset configures cleanly today. The other five are
 wired into the matrix and fail with `E_MISSING_VARIANT` until their milestone

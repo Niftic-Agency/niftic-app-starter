@@ -23,7 +23,18 @@
     "provisional": [
       "@sveltejs/adapter-node",
       "@sveltejs/adapter-vercel"
-    ]
+    ],
+    "_capabilityComment": "Base modules that exist only when a capability is on. Turning the capability off prunes the paths and drops the deps, so a static app's lockfile carries no mail SDK.",
+    "capabilityDeps": {
+      "email": [
+        "resend"
+      ]
+    },
+    "capabilityPaths": {
+      "email": [
+        "src/lib/server/email"
+      ]
+    }
   },
   "scripts": {
     "configure": "tsx scripts/configure/index.ts",
@@ -39,6 +50,7 @@
   },
   "dependencies": {
     "clsx": "2.1.1",
+    "resend": "6.18.1",
     "tailwind-merge": "3.5.0"
   },
   "devDependencies": {

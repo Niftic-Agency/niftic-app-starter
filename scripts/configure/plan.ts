@@ -44,6 +44,10 @@ export interface TreeIndex {
 			engineOnly?: string[];
 			engineScripts?: string[];
 			provisional?: string[];
+			/** capability → deps that only exist while that capability is on. */
+			capabilityDeps?: Record<string, string[]>;
+			/** capability → base paths removed when that capability is off. */
+			capabilityPaths?: Record<string, string[]>;
 		};
 	};
 }
@@ -308,6 +312,18 @@ export function buildPlan(resolved: ResolvedManifest, tree: TreeIndex): Result<P
 
 	ops.push(...generated);
 
+	// ── pass 3b: capabilities that are switched off ──────────────────────────
+	// These modules live in base rather than in a variant, so turning the
+	// capability off has to remove them explicitly.
+	for (const [capability, paths] of Object.entries(
+		tree.basePackage.niftic?.capabilityPaths ?? {}
+	)) {
+		if (resolved.capabilities[capability as keyof typeof resolved.capabilities]) continue;
+		for (const path of paths) {
+			ops.push({ kind: 'removeDir', path, reason: `${capability} is disabled` });
+		}
+	}
+
 	// ── pass 4: prune (terminal phase — these delete what pass 2 copied from) ──
 	for (const dir of ['variants', 'scripts/configure']) {
 		ops.push({
@@ -431,6 +447,21 @@ export function mergePackageJson(
 		}
 	}
 
+	// Capability deps: a static app must not carry a mail SDK in its lockfile.
+	for (const [capability, names] of Object.entries(niftic.capabilityDeps ?? {})) {
+		if (resolved.capabilities[capability as keyof typeof resolved.capabilities]) continue;
+		for (const name of [...names].sort(byteCompare)) {
+			if (name in dependencies) {
+				delete dependencies[name];
+				removedDeps.push(name);
+			}
+			if (name in devDependencies) {
+				delete devDependencies[name];
+				removedDeps.push(name);
+			}
+		}
+	}
+
 	return {
 		dependencies: sortedRecord(dependencies),
 		devDependencies: sortedRecord(devDependencies),
@@ -508,6 +539,18 @@ function buildRegistries(
 			source: 'base'
 		}
 	];
+
+	// Email lives in base rather than a variant, so its health check is
+	// registered here rather than through a variant.json declaration.
+	if (resolved.capabilities.email) {
+		entries.push({
+			registry: 'health',
+			name: 'emailCheck',
+			from: '$lib/server/email/health',
+			order: 30,
+			source: 'base'
+		});
+	}
 
 	for (const id of resolved.variants) {
 		const declared = tree.variants[id]?.manifest.registries;

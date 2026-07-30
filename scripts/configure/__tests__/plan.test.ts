@@ -157,6 +157,44 @@ describe('buildPlan', () => {
 		expect(dependencies['@libsql/client']).toBeTruthy();
 	});
 
+	it('prunes the email module and its SDK when email is off', async () => {
+		const result = await planFor(
+			manifest({
+				preset: 'turso',
+				auth: 'none',
+				storage: 'none',
+				admin: false,
+				example: false,
+				email: false
+			})
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		// Email lives in base, not a variant, so turning it off has to remove the
+		// directory explicitly — otherwise a mail SDK ships in an app that can't
+		// send mail.
+		const removed = result.value.ops
+			.filter((op) => op.kind === 'removeDir')
+			.map((op) => (op.kind === 'removeDir' ? op.path : ''));
+		expect(removed).toContain('src/lib/server/email');
+		expect(result.value.packageJson.removedDeps).toContain('resend');
+		expect(result.value.packageJson.dependencies.resend).toBeUndefined();
+
+		// ...and its health check must not be registered against a deleted module.
+		expect(result.value.registries.some((e) => e.name === 'emailCheck')).toBe(false);
+	});
+
+	it('keeps the email module and registers its health check when email is on', async () => {
+		const result = await planFor(
+			manifest({ preset: 'turso', auth: 'none', storage: 'none', admin: false, example: false })
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.packageJson.dependencies.resend).toBeTruthy();
+		expect(result.value.registries.some((e) => e.name === 'emailCheck')).toBe(true);
+	});
+
 	it('fails loudly when a selected variant has not been built yet', async () => {
 		// The full turso preset pulls in auth/storage/admin/example, which land in M1.
 		const result = await planFor(manifest({ preset: 'turso' }));

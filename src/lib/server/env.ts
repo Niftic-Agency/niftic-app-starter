@@ -22,7 +22,13 @@ const schema = z.object({
 	PUBLIC_APP_NAME: z.string().optional(),
 	LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).optional(),
 	/** Deploy identifier surfaced by /api/health. Set by CI or the host. */
-	GIT_SHA: z.string().optional()
+	GIT_SHA: z.string().optional(),
+	// Email. Optional in the provisional schema so the unconfigured superset
+	// typechecks; configure regenerates this file and marks them required.
+	RESEND_API_KEY: z.string().optional(),
+	EMAIL_FROM: z.string().optional(),
+	EMAIL_REPLY_TO: z.string().optional(),
+	EMAIL_DRY_RUN: z.string().optional()
 });
 
 export type Env = z.infer<typeof schema>;
