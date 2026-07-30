@@ -4,6 +4,7 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { requireUser } from '$lib/server/auth/permissions';
 import { deleteNote, getNote, updateNote } from '$lib/server/db/repos/notes';
 import { noteSchema } from '$lib/notes/schema';
+import { acceptAttachment } from '$lib/notes/attachment';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -31,7 +32,10 @@ export const actions: Actions = {
 
 		// Re-checked here, not just in the load — the load never ran for a direct
 		// POST. The owner scoping in the repo is what makes this safe.
-		const updated = await updateNote(event.params.id, user.id, form.data);
+		const updated = await updateNote(event.params.id, user.id, {
+			...form.data,
+			attachmentKey: acceptAttachment(form.data.attachmentKey, user.id) ?? undefined
+		});
 		if (!updated) error(404, 'Not found');
 
 		return { form };

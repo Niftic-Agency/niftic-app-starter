@@ -12,7 +12,13 @@ export const noteSchema = z.object({
 		.trim()
 		.min(1, 'Give it a title')
 		.max(200, 'Keep the title under 200 characters'),
-	body: z.string().trim().max(10_000, 'Keep the note under 10,000 characters').default('')
+	body: z.string().trim().max(10_000, 'Keep the note under 10,000 characters').default(''),
+	/**
+	 * Set by the upload widget. Present in the schema even on apps without
+	 * storage — the server drops it there, so a stray field is inert rather than
+	 * a validation failure.
+	 */
+	attachmentKey: z.string().max(500).optional()
 });
 
 export type NoteInput = z.infer<typeof noteSchema>;

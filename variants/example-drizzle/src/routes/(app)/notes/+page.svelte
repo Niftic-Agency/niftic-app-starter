@@ -6,6 +6,8 @@
 	import FormField from '$lib/components/FormField.svelte';
 	import Input from '$lib/components/Input.svelte';
 	import Textarea from '$lib/components/Textarea.svelte';
+	import AttachmentField from '$lib/components/AttachmentField.svelte';
+	import { has } from '$lib/app-config';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -59,6 +61,13 @@
 				{/snippet}
 			</FormField>
 
+			<!-- `has.storage` is a literal, so this whole block disappears from apps
+			     configured without uploads. The server-side counterpart is the
+			     branch-selected $lib/notes/attachment module. -->
+			{#if has.storage}
+				<AttachmentField bind:value={$form.attachmentKey} />
+			{/if}
+
 			<div>
 				<Button type="submit" disabled={$submitting}>
 					{$submitting ? 'Saving…' : 'Add note'}
@@ -82,6 +91,16 @@
 								<h3 class="truncate font-medium">{note.title}</h3>
 								{#if note.body}
 									<p class="text-ink-soft mt-1 text-sm whitespace-pre-wrap">{note.body}</p>
+								{/if}
+								{#if has.storage && note.attachmentKey}
+									<!-- Goes through the app, which authorizes and then redirects to a
+									     short-lived signed URL. The bucket has no public address. -->
+									<a
+										href="/api/files/{note.attachmentKey}"
+										class="text-ink-soft hover:text-foreground mt-2 inline-block text-xs underline"
+									>
+										Attachment
+									</a>
 								{/if}
 								<p class="text-ink-mute mt-2 text-xs">
 									Updated {formatted.format(note.updatedAt)}

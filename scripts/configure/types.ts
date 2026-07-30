@@ -25,7 +25,13 @@ export type Dialect = 'pg' | 'sqlite' | 'none';
  */
 export const SELECTOR_GROUPS = {
 	dialect: ['pg', 'sqlite'],
-	authMode: ['internal', 'client']
+	authMode: ['internal', 'client'],
+	/**
+	 * Lets a feature ship a storage-aware and a storage-free version of the same
+	 * module. Needed because `has.storage` is a literal type: it can hide markup,
+	 * but it cannot make an import of a module that wasn't copied resolve.
+	 */
+	storage: ['r2', 'supabase', 'none']
 } as const satisfies Record<string, readonly string[]>;
 
 export type SelectorGroup = keyof typeof SELECTOR_GROUPS;

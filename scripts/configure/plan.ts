@@ -183,7 +183,14 @@ export function matchSelector(path: string): SelectorMatch | null {
 }
 
 function selectorValueFor(group: SelectorGroup, resolved: ResolvedManifest): string {
-	return group === 'dialect' ? resolved.dialect : resolved.manifest.authMode;
+	switch (group) {
+		case 'dialect':
+			return resolved.dialect;
+		case 'authMode':
+			return resolved.manifest.authMode;
+		case 'storage':
+			return resolved.manifest.storage;
+	}
 }
 
 // ─── plan ────────────────────────────────────────────────────────────────────

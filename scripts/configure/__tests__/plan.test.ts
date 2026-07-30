@@ -86,6 +86,19 @@ describe('selector suffix resolution', () => {
 		});
 	});
 
+	it('resolves a storage suffix — the axis that lets a feature ship two versions', () => {
+		expect(matchSelector('src/lib/notes/attachment.r2.ts')).toEqual({
+			group: 'storage',
+			value: 'r2',
+			resolved: 'src/lib/notes/attachment.ts'
+		});
+		expect(matchSelector('src/lib/notes/attachment.none.ts')).toEqual({
+			group: 'storage',
+			value: 'none',
+			resolved: 'src/lib/notes/attachment.ts'
+		});
+	});
+
 	it('never treats the base filename as a selector', () => {
 		// A file genuinely called `client.ts` is a module, not a branch marker.
 		expect(matchSelector('src/lib/client.ts')).toBeNull();
