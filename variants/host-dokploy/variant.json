@@ -1,0 +1,20 @@
+{
+  "description": "Dokploy host: adapter-node behind the platform proxy, in a multi-stage container. Owns the entrypoint for both profiles that deploy here — it branches on whether litestream.yml is present, which is the one thing that actually distinguishes them, rather than making two variants fight over one file.",
+  "devDependencies": {
+    "@sveltejs/adapter-node": "5.5.7"
+  },
+  "env": [
+    {
+      "name": "PORT",
+      "required": false,
+      "note": "Set in the image to 3000. Override only if the platform needs a different port.",
+      "example": "3000"
+    },
+    {
+      "name": "BODY_SIZE_LIMIT",
+      "required": false,
+      "note": "adapter-node's request body cap. Defaults to 512K, which is plenty — uploads go straight to storage through a signed URL and never through this process.",
+      "example": "512K"
+    }
+  ]
+}

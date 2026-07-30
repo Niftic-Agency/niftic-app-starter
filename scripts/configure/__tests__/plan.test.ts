@@ -339,14 +339,52 @@ describe('buildPlan', () => {
 		]);
 	});
 
-	it('fails loudly when a selected variant has not been built yet', async () => {
-		// sqlite needs db-sqlite-extras, which lands in M3. Refusing beats emitting
-		// an app whose data layer is half there.
+	it('plans the whole sqlite preset — the M3 branch is complete', async () => {
 		const result = await planFor(manifest({ preset: 'sqlite' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.resolved.variants).toEqual([
+			'db-drizzle-turso',
+			'db-sqlite-extras',
+			'auth-better',
+			'storage-r2',
+			'admin-better',
+			'example-drizzle',
+			'host-dokploy'
+		]);
+		// Same libSQL client as turso, so the dialect does not change.
+		expect(result.value.resolved.dialect).toBe('sqlite');
+		expect(result.value.resolved.adapter).toBe('node');
+	});
+
+	it('ships the container path with the sqlite preset, and only there', async () => {
+		async function writtenFor(preset: 'sqlite' | 'turso'): Promise<string[]> {
+			const result = await planFor(manifest({ preset }));
+			if (!result.ok) return [];
+			return result.value.ops.filter((op) => op.kind === 'copy').map((op) => op.to);
+		}
+
+		const sqlite = await writtenFor('sqlite');
+		for (const path of ['Dockerfile', 'entrypoint.sh', '.dockerignore', 'litestream.yml']) {
+			expect(sqlite, path).toContain(path);
+		}
+
+		// The turso preset deploys to Vercel and must carry none of it — a
+		// Dockerfile in a Vercel app is a thing someone will eventually try to use.
+		const turso = await writtenFor('turso');
+		for (const path of ['Dockerfile', 'entrypoint.sh', 'litestream.yml']) {
+			expect(turso, path).not.toContain(path);
+		}
+	});
+
+	it('fails loudly when a selected variant has not been built yet', async () => {
+		// static needs static-mode, which lands in M4. Refusing beats emitting an
+		// app whose data layer is half there.
+		const result = await planFor(manifest({ preset: 'static' }));
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
 		expect(result.errors.every((e) => e.code === 'E_MISSING_VARIANT')).toBe(true);
-		expect(result.errors.map((e) => e.message).join(' ')).toContain('db-sqlite-extras');
+		expect(result.errors.map((e) => e.message).join(' ')).toContain('static-mode');
 	});
 });
 

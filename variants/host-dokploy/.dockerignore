@@ -1,0 +1,26 @@
+# Keep the build context small and keep secrets out of it.
+#
+# `.env` is the important line: the build context is readable by every stage,
+# and a stray COPY of it would bake production credentials into an image layer.
+
+.git
+.github
+node_modules
+.svelte-kit
+build
+.vercel
+coverage
+test-results
+playwright-report
+
+# Local state and secrets
+.data
+.env
+.env.*
+!.env.example
+
+# Nothing here affects the runtime image
+*.md
+docs
+tests
+.DS_Store

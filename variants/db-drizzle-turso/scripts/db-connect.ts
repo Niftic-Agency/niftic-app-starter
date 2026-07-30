@@ -1,5 +1,8 @@
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
+// A relative import into src, which tsx resolves happily — `pragmas.ts` is pure
+// and carries no `$lib` imports, precisely so it can be shared like this.
+import { applyFilePragmas, isFileUrl } from '../src/lib/server/db/pragmas';
 import * as schema from '../src/lib/server/db/schema/index';
 
 /**
@@ -29,6 +32,14 @@ export function connect(): DbConnection {
 	const authToken = process.env.TURSO_AUTH_TOKEN;
 
 	const client = createClient({ url, ...(authToken ? { authToken } : {}) });
+
+	// The boot migration runs before Litestream attaches, so if these were only
+	// applied on the app path the entrypoint would hand Litestream a database
+	// still in rollback-journal mode. Verified: without this, `journal_mode` was
+	// still `delete` after migrate and seed.
+	if (isFileUrl(url)) {
+		applyFilePragmas(client, (pragma, error) => console.error(`pragma failed: ${pragma}`, error));
+	}
 
 	return {
 		db: create(client),

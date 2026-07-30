@@ -1,0 +1,35 @@
+# Litestream 0.5 configuration.
+#
+# Read by both halves of the container entrypoint: `litestream restore` on boot
+# when the volume is empty, and `litestream replicate -exec` to supervise the
+# app afterwards.
+#
+# Format note, because 0.3 examples are still everywhere on the web: 0.5 replaced
+# the per-database `replicas:` ARRAY with a single `replica:` field, and moved
+# retention out of the replica into a global `snapshot:` block. A 0.3-shaped file
+# will not load.
+
+# Retention is global in 0.5, not per-replica. A snapshot every 24h with 24h of
+# retention means the recovery window is "the last snapshot plus every WAL frame
+# since" — enough to restore to any point in the last day.
+snapshot:
+  interval: 24h
+  retention: 24h
+
+dbs:
+  - path: ${DB_PATH}
+    replica:
+      type: s3
+      bucket: ${LITESTREAM_BUCKET}
+      # A prefix of its own, so nothing else in the bucket can be confused for
+      # part of the recovery chain — and so a lifecycle rule aimed at something
+      # else cannot reach it. Never put a deletion rule on this prefix.
+      path: litestream
+      endpoint: ${LITESTREAM_ENDPOINT}
+      # R2 ignores the region but the S3 client requires one.
+      region: auto
+      access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+      secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+      # How long a crash can cost you. One second of writes is the trade this
+      # profile makes for not running a database server.
+      sync-interval: 1s

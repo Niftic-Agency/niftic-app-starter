@@ -1,6 +1,8 @@
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { env } from '$lib/server/env';
+import { logger } from '$lib/server/logger';
+import { applyFilePragmas, isFileUrl } from './pragmas';
 import * as schema from './schema';
 
 /**
@@ -21,6 +23,16 @@ function createDb() {
 		url: TURSO_DATABASE_URL,
 		...(TURSO_AUTH_TOKEN ? { authToken: TURSO_AUTH_TOKEN } : {})
 	});
+
+	// Keyed off the URL rather than the profile, because that is the actual
+	// condition: pragmas apply to a local file and mean nothing to hosted libSQL.
+	// It catches the `sqlite` profile in production and the `turso` profile's
+	// local dev database alike, which is the behaviour you want in both.
+	if (isFileUrl(TURSO_DATABASE_URL)) {
+		applyFilePragmas(client, (pragma, error) =>
+			logger.error('db.pragma_failed', { pragma, error })
+		);
+	}
 
 	return drizzle(client, { schema });
 }

@@ -1,0 +1,32 @@
+{
+  "description": "Litestream continuous replication for the sqlite profile, layered on db-drizzle-turso. Thin on purpose: the client and the dialect are already right, and the WAL/busy_timeout pragmas live in that variant because they key off a `file:` URL rather than off the profile — which also covers a turso app's local dev database. What is genuinely specific to this profile is the replica, and that is what lives here.",
+  "env": [
+    {
+      "name": "DB_PATH",
+      "required": true,
+      "note": "The SQLite file, on the mounted volume. The single source of truth for where the database is: the container entrypoint derives TURSO_DATABASE_URL from it, and litestream.yml replicates it. Must be on the same host and volume as the app process — never a network filesystem.",
+      "example": "/data/app.db"
+    },
+    {
+      "name": "LITESTREAM_BUCKET",
+      "required": true,
+      "note": "A DEDICATED bucket, nf-{slug}-{env}-backups. Never the uploads bucket, and never with a lifecycle deletion rule on the litestream/ prefix — that destroys the recovery chain.",
+      "example": "nf-my-app-prod-backups"
+    },
+    {
+      "name": "LITESTREAM_ENDPOINT",
+      "required": true,
+      "note": "The R2 S3-compatible endpoint for your account.",
+      "example": "https://ACCOUNT_ID.r2.cloudflarestorage.com"
+    },
+    {
+      "name": "LITESTREAM_ACCESS_KEY_ID",
+      "required": true,
+      "note": "Its own R2 token, scoped to the backups bucket only. Not the uploads credentials."
+    },
+    {
+      "name": "LITESTREAM_SECRET_ACCESS_KEY",
+      "required": true
+    }
+  ]
+}

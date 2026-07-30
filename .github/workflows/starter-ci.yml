@@ -130,13 +130,16 @@ jobs:
             experimental: false
             e2e: false
             seed: false
+          # The app half of the sqlite profile runs here against a `file:` database
+          # like every other lane. The CONTAINER half — entrypoint, Litestream
+          # restore, redeploy — is the `container` job below.
+          - preset: sqlite # the shipped preset, complete
+            experimental: false
+            e2e: true
+            seed: true
           # Land with their milestones. Wired now, and expected to fail with
           # E_MISSING_VARIANT until then — listed rather than omitted so the gap
           # is visible on every run instead of being quietly forgotten.
-          - preset: sqlite # M3
-            experimental: true
-            e2e: false
-            seed: false
           - preset: static # M4
             experimental: true
             e2e: false
@@ -209,6 +212,13 @@ jobs:
           GOOGLE_CLIENT_SECRET: 'ci-canary-google-secret-71bd94'
           ADMIN_EMAIL: 'admin@example.com'
           ADMIN_PASSWORD: 'ci-only-password-2f8a1c'
+          # sqlite lane only, and inert elsewhere. This lane runs the APP against
+          # a file; the container and its replica are the `container` job.
+          DB_PATH: './.data/ci.db'
+          LITESTREAM_BUCKET: 'nf-ci-backups'
+          LITESTREAM_ENDPOINT: 'https://ci.example.invalid'
+          LITESTREAM_ACCESS_KEY_ID: 'ci-fake-litestream-key'
+          LITESTREAM_SECRET_ACCESS_KEY: 'ci-canary-litestream-secret-4e2a91'
           # Presigning is pure computation, so these never contact Cloudflare.
           R2_ACCOUNT_ID: 'ci-fake-account'
           R2_ACCESS_KEY_ID: 'ci-fake-key-id'
@@ -343,3 +353,173 @@ jobs:
           name: playwright-postgres-integration
           path: ${{ runner.temp }}/app/test-results
           retention-days: 7
+
+  container:
+    name: sqlite container — boot, redeploy, restore
+    runs-on: ubuntu-latest
+    # Spec §14's acceptance test for M3, and the only place it can run: the
+    # container boots on an empty volume, survives a redeploy with data intact,
+    # and gets its data back from the replica when the volume is destroyed.
+    #
+    # MinIO stands in for R2. Litestream talks plain S3, so what this proves
+    # about the entrypoint, the config format and the restore flags holds
+    # against R2 too; what it does NOT prove is anything about R2 itself.
+    env:
+      DB_PATH: /data/app.db
+      APP_PORT: '3000'
+      LITESTREAM_BUCKET: backups
+      LITESTREAM_ENDPOINT: http://127.0.0.1:9000
+      LITESTREAM_ACCESS_KEY_ID: minioadmin
+      LITESTREAM_SECRET_ACCESS_KEY: minioadmin
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: ci-only-password-2f8a1c
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Configure a clean copy
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/app" && mkdir -p "$RUNNER_TEMP/app"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/app"
+          cp scripts/configure/presets/sqlite.yml "$RUNNER_TEMP/app/niftic.app.yml"
+          cd "$RUNNER_TEMP/app"
+          "$GITHUB_WORKSPACE/node_modules/.bin/tsx" scripts/configure/index.ts --yes --no-install
+
+      - name: Start MinIO and create the backups bucket
+        run: |
+          set -euo pipefail
+          docker run -d --name minio --network host \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          for _ in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker run --rm --network host --entrypoint sh minio/mc -c \
+            "mc alias set ci http://127.0.0.1:9000 minioadmin minioadmin && \
+             mc mb --ignore-existing ci/backups"
+
+      - name: Build the image
+        run: docker build -t niftic-app:ci "$RUNNER_TEMP/app"
+
+      # Every run of the container uses this same argument list. Written once so
+      # the three boots below cannot drift apart.
+      - name: Write the run helper
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/run-app.sh" <<'EOF'
+          #!/bin/sh
+          set -eu
+          docker run -d --name app --network host \
+            -v app-data:/data \
+            -e DB_PATH="$DB_PATH" \
+            -e PORT="$APP_PORT" \
+            -e ORIGIN="http://127.0.0.1:$APP_PORT" \
+            -e BETTER_AUTH_URL="http://127.0.0.1:$APP_PORT" \
+            -e BETTER_AUTH_SECRET=ci-canary-better-auth-secret-2f8a1c \
+            -e RESEND_API_KEY=ci-canary-resend-key-9d4b7e \
+            -e EMAIL_FROM=no-reply@example.com \
+            -e EMAIL_DRY_RUN=true \
+            -e R2_ACCOUNT_ID=ci-fake-account \
+            -e R2_ACCESS_KEY_ID=ci-fake-key-id \
+            -e R2_SECRET_ACCESS_KEY=ci-canary-r2-secret-5a6c3f \
+            -e R2_BUCKET=nf-ci-assets \
+            -e LITESTREAM_BUCKET="$LITESTREAM_BUCKET" \
+            -e LITESTREAM_ENDPOINT="$LITESTREAM_ENDPOINT" \
+            -e LITESTREAM_ACCESS_KEY_ID="$LITESTREAM_ACCESS_KEY_ID" \
+            -e LITESTREAM_SECRET_ACCESS_KEY="$LITESTREAM_SECRET_ACCESS_KEY" \
+            niftic-app:ci
+          for _ in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:$APP_PORT/api/health" >/dev/null 2>&1; then
+              echo "app is healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the app never became healthy"
+          docker logs app
+          exit 1
+          EOF
+          chmod +x "$RUNNER_TEMP/run-app.sh"
+
+      - name: Boot on an EMPTY volume, then seed
+        run: |
+          set -euo pipefail
+          docker volume create app-data
+          "$RUNNER_TEMP/run-app.sh"
+
+          # The seed is not part of the entrypoint — an app that reseeds on every
+          # deploy is a different kind of bug. Run it once, by hand, as an
+          # operator would.
+          docker exec \
+            -e TURSO_DATABASE_URL="file:$DB_PATH" \
+            -e ADMIN_EMAIL="$ADMIN_EMAIL" \
+            -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+            app node_modules/.bin/tsx scripts/seed.ts
+
+          # Signing in proves the user row AND its credential account are really
+          # there — a stronger assertion than reading the file.
+          curl -fsS -X POST "http://127.0.0.1:$APP_PORT/api/auth/sign-in/email" \
+            -H 'content-type: application/json' \
+            -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" \
+            -o /dev/null
+
+          # WAL is what Litestream replicates. If the boot migration left the file
+          # in rollback-journal mode, this is where we find out.
+          docker exec app sh -c \
+            "node -e \"import('@libsql/client').then(async (m) => {
+               const c = m.createClient({ url: 'file:$DB_PATH' });
+               const r = await c.execute('PRAGMA journal_mode');
+               if (r.rows[0].journal_mode !== 'wal') { console.error('not WAL:', r.rows); process.exit(1); }
+               console.log('journal_mode is wal');
+               c.close();
+             })\""
+
+          # sync-interval is 1s; give the replica time to catch up before the
+          # volume is destroyed two steps from now.
+          sleep 10
+
+      - name: Redeploy on the SAME volume — data must survive
+        run: |
+          set -euo pipefail
+          docker stop -t 30 app && docker rm app
+          "$RUNNER_TEMP/run-app.sh"
+
+          # No restore involved here: the database was already on the volume, and
+          # -if-db-not-exists means the entrypoint left it alone.
+          curl -fsS -X POST "http://127.0.0.1:$APP_PORT/api/auth/sign-in/email" \
+            -H 'content-type: application/json' \
+            -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" \
+            -o /dev/null
+          echo "data survived a redeploy"
+
+      - name: Destroy the volume — data must come back from the replica
+        run: |
+          set -euo pipefail
+          docker stop -t 30 app && docker rm app
+          docker volume rm app-data
+          docker volume create app-data
+
+          # This is the drill the whole profile rests on: a replacement volume,
+          # and the only copy of the data is in object storage.
+          "$RUNNER_TEMP/run-app.sh"
+
+          docker logs app 2>&1 | head -20
+
+          curl -fsS -X POST "http://127.0.0.1:$APP_PORT/api/auth/sign-in/email" \
+            -H 'content-type: application/json' \
+            -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" \
+            -o /dev/null
+          echo "data was restored from the replica"
+
+      - name: Container logs on failure
+        if: failure()
+        run: |
+          echo '--- app ---';   docker logs app   2>&1 | tail -100 || true
+          echo '--- minio ---'; docker logs minio 2>&1 | tail -30  || true

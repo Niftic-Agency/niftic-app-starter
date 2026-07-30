@@ -224,6 +224,44 @@ runs under plain tsx where `$lib` does not resolve and so cannot use
 `src/lib/server/db`. `connection.ts` is deliberately free of `$lib` imports for
 the same reason: the scripts import `isLoopback` from it directly.
 
+## Surprises found while building the SQLite branch
+
+**Two of the four pragmas do not persist, and the boot order made that matter.**
+Measured against @libsql/client on a fresh file: `journal_mode` is `delete` and
+persists once set; `busy_timeout` is `0` and resets on **every** connection;
+`synchronous` is `FULL` and also resets; `foreign_keys` is already `1`, where
+plain SQLite defaults it off. The consequence is not obvious — the container
+entrypoint restores, then migrates, then hands the database to Litestream. With
+the pragmas applied only on the app path, `journal_mode` was still `delete` after
+migrate and seed, so Litestream was being handed a rollback-journal database.
+Verified by checking, then fixed by moving them into a pure `pragmas.ts` that
+both `src/lib/server/db/index.ts` and `scripts/db-connect.ts` use — the same seam
+the Postgres branch uses for `connection.ts`.
+
+**Unawaited pragmas are safe here, and that was tested rather than assumed.** The
+file-backed libSQL client serialises statements on one connection in call order,
+so a query issued immediately after an unawaited `PRAGMA` already sees it. That
+is what lets `db()` stay synchronous. The `.catch` is not decoration: an
+unhandled rejection at boot would take the process down.
+
+**Litestream 0.5's release assets are not named after the tag.** The tarball is
+`litestream-0.5.15-linux-x86_64.tar.gz` — no `v` prefix, and `x86_64` rather than
+the `amd64` that `dpkg --print-architecture` reports. The obvious URL 404s at
+image build time. The Dockerfile maps the architecture explicitly.
+
+**Litestream 0.5 config, confirmed:** the per-database `replicas:` array is now a
+single `replica:` field, and retention moved out of the replica into a global
+`snapshot:` block. Environment variables are expanded in the config file, which
+is what lets one `litestream.yml` serve every environment. `restore
+-if-db-not-exists -if-replica-exists` and `replicate -exec` all still exist and
+still mean what the spec assumed.
+
+**One entrypoint, branching on a file.** `host-dokploy` serves both the sqlite and
+postgres profiles, and their boot sequences differ. Rather than two variants
+fighting over `entrypoint.sh`, the one file branches on whether `litestream.yml`
+exists — which is precisely the thing that distinguishes them, since only
+`db-sqlite-extras` ships one.
+
 ## What M2 has and has not been run against
 
 Recorded here because CLAUDE.md's honesty clause requires it, and because the
@@ -240,6 +278,26 @@ seed script against Postgres, or the smokes on that branch. The
 `postgres-integration` CI job exists for exactly this and has not executed —
 there is no GitHub remote yet, and the machine has neither Docker nor Postgres.
 The first run of that job is M2's real acceptance test.
+
+## What M3 has and has not been run against
+
+Verified locally, because a SQLite database is a file and adapter-node runs
+anywhere: configure, check, lint, unit tests, build, `db:generate`, `db:migrate`,
+`db:seed`, the eight Playwright smokes, and the app driven through the real
+`node build/index.js` server — the same binary the container runs — with
+`/api/health` green and a sign-in round trip. The pragma fix above was found and
+confirmed this way.
+
+**Never run:** `docker build`, `entrypoint.sh`, and every Litestream operation.
+No image has been built and no byte has been replicated. The `container` CI job
+runs spec §14's acceptance drill — boot on an empty volume, redeploy with data
+intact, destroy the volume and restore from the replica — against MinIO standing
+in for R2, and it has not executed either.
+
+Two things that job cannot tell you even when it goes green: anything about R2
+specifically (MinIO speaks the same S3 protocol, which is the point, but it is
+not the same service), and anything about Dokploy itself. The first real deploy
+is still the first real deploy.
 
 ## A gap in the spec's legality rules
 

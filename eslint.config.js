@@ -85,6 +85,10 @@ export default ts.config(
 			'build/',
 			'node_modules/',
 			'drizzle/',
+			// Claude Code puts agent worktrees here. They are full copies of the
+			// repo, tsconfig included, and typescript-eslint refuses to guess a
+			// root when it can see two.
+			'.claude/',
 			// Overlay trees are type-checked after they are copied into a configured
 			// app — that is the only context where their imports resolve.
 			'variants/'
