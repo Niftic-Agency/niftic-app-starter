@@ -1,0 +1,7 @@
+name: Static Preset
+slug: static-preset
+description: Prerendered marketing site with a contact endpoint.
+visibility: client
+preset: static
+deployment:
+  productionUrl: https://static-preset.example.com

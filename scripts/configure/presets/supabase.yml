@@ -1,0 +1,7 @@
+name: Supabase Preset
+slug: supabase-preset
+description: Canonical supabase app. A fork, not a variant.
+visibility: client
+preset: supabase
+deployment:
+  productionUrl: https://supabase-preset.example.com

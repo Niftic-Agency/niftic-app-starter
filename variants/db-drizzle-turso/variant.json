@@ -1,0 +1,38 @@
+{
+  "description": "libSQL via Drizzle. Serves both the `turso` profile (hosted, authToken) and the `sqlite` profile (local file: URL) — same client, same dialect, so db-sqlite-extras only has to add pragmas, Litestream and boot migrations.",
+  "dependencies": {
+    "@libsql/client": "0.17.4",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.10"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx scripts/seed.ts"
+  },
+  "env": [
+    {
+      "name": "TURSO_DATABASE_URL",
+      "required": true,
+      "note": "libsql://... in production. Local dev and unit tests use file:./.data/dev.db",
+      "example": "file:./.data/dev.db"
+    },
+    {
+      "name": "TURSO_AUTH_TOKEN",
+      "required": false,
+      "note": "Required for a hosted libsql:// URL; leave empty for a local file: URL."
+    }
+  ],
+  "registries": {
+    "health": [
+      {
+        "name": "databaseCheck",
+        "from": "$lib/server/db/health",
+        "order": 10
+      }
+    ]
+  }
+}

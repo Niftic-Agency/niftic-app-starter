@@ -1,0 +1,7 @@
+name: Postgres Preset
+slug: postgres-preset
+description: Canonical postgres app for the starter CI matrix.
+visibility: client
+preset: postgres
+deployment:
+  productionUrl: https://postgres-preset.example.com

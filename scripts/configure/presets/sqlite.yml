@@ -1,0 +1,8 @@
+name: Sqlite Preset
+slug: sqlite-preset
+description: Canonical sqlite app. Dokploy only, replicas must stay at 1.
+visibility: internal
+preset: sqlite
+deployment:
+  replicas: 1
+  productionUrl: https://sqlite-preset.example.com

@@ -1,0 +1,57 @@
+name: bootstrap
+
+# The apps.niftic.com path.
+#
+# The provisioner's whole job is: create a repo from this template, commit a
+# valid niftic.app.yml, dispatch this workflow, then poll for the commit.
+#
+# Configure's prune step deletes this file, so the commit that configures the app
+# is also the commit that removes the bootstrapper. That is deliberate — it means
+# a configured repo cannot be re-bootstrapped by accident.
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: 'Recorded in the commit message. The manifest is the source of truth.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Guard against double-configuring
+        run: |
+          if grep -qE '^generated:' niftic.app.yml; then
+            echo "::error::This repo is already configured. Changing profile is a manual migration."
+            exit 1
+          fi
+
+      # Only the engine's own dependencies are needed to plan and apply.
+      # --ignore-scripts because nothing here needs a native build step.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Configure
+        run: pnpm exec tsx scripts/configure/index.ts --yes --no-install
+
+      - name: Commit
+        run: |
+          set -euo pipefail
+          preset="$(grep -E '^preset:' niftic.app.yml | head -1 | awk '{print $2}')"
+          git config user.name 'niftic-bot'
+          git config user.email 'bot@niftic.agency'
+          git add -A
+          git commit -m "chore: configure app (${preset})"
+          git push

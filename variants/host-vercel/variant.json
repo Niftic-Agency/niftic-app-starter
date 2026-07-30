@@ -1,0 +1,6 @@
+{
+  "description": "Vercel host. svelte.config.js is written by the render step rather than shipped here, because the adapter is derived from the manifest rather than owned by the variant. ORIGIN comes from the core env group.",
+  "devDependencies": {
+    "@sveltejs/adapter-vercel": "6.3.4"
+  }
+}

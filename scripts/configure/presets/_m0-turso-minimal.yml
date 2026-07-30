@@ -1,0 +1,14 @@
+# M0 gate fixture: the smallest legal turso app — database + host only.
+# Auth, storage, admin and the example feature arrive in M1, so this is the
+# largest slice the engine can actually produce today.
+name: M0 Smoke
+slug: m0-smoke
+description: Minimal turso app used to gate the configure engine.
+visibility: internal
+preset: turso
+auth: none
+storage: none
+admin: false
+example: false
+deployment:
+  productionUrl: https://m0-smoke.example.com

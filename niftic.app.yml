@@ -1,0 +1,49 @@
+# niftic.app.yml — the single source of truth for this app's shape.
+#
+# Written by the `niftic-app` Claude Code skill (interview) or by apps.niftic.com
+# (form). Read by `pnpm configure`, which prunes this superset repo down to one
+# concrete application and then deletes itself.
+#
+# Configure fills unset axes from the preset. Explicit values override where
+# legal; illegal combinations fail validation with an explanation.
+
+name: My App
+slug: my-app
+description: ''
+visibility: client # internal | client
+
+# turso | postgres | sqlite | supabase | static
+#
+#   turso     Vercel + Turso (libSQL). The default. Serverless, cheap, no disk.
+#   postgres  Vercel or Dokploy + Postgres via PgDog. Reach for real relational load.
+#   sqlite    Dokploy only. One host, one disk, Litestream backups. replicas MUST be 1.
+#   supabase  Vercel + Supabase. A fork: supabase-js, RLS, Supabase Auth, Supabase CLI.
+#   static    Prerendered marketing site. No db, no auth, no storage. Contact form only.
+preset: turso
+
+# ── Axes ────────────────────────────────────────────────────────────────────
+data: turso # turso | sqlite | postgres | supabase | none
+host: vercel # vercel | dokploy
+auth: better-auth # better-auth | supabase-auth | none
+authMode: client # internal (Google, domain-restricted) | client (email/password)
+organizations: false # Better Auth organization plugin. Better Auth profiles only.
+storage: r2 # r2 | supabase | none
+email: true
+admin: true # protected /admin shell. Requires auth != none.
+example: true # keep the reference "notes" feature
+
+runtime:
+  node: 24
+
+deployment:
+  provider: vercel # mirrors host
+  replicas: 1 # must be 1 when data: sqlite
+  productionUrl: ''
+
+# Written by configure. Its presence marks this repo as configured, and
+# configure refuses to run again once it exists.
+#
+# generated:
+#   at: 2026-07-30T00:00:00Z
+#   starterVersion: 0.1.0
+#   starterCommit: abc1234

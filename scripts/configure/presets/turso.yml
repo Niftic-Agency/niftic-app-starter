@@ -1,0 +1,7 @@
+name: Turso Preset
+slug: turso-preset
+description: Canonical turso app for the starter CI matrix.
+visibility: client
+preset: turso
+deployment:
+  productionUrl: https://turso-preset.example.com

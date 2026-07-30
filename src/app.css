@@ -1,0 +1,111 @@
+@import 'tailwindcss';
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Design tokens — PLACEHOLDERS. This file is the one place to restyle an app.
+ *
+ * Deliberately unbranded: a warm achromatic monochrome with no hue at all, so a
+ * client's own brand supplies the colour rather than inheriting ours. Add an
+ * accent by giving `--accent` a value; nothing else needs to change.
+ *
+ * Structure: raw values live in `:root` under bare names, and `@theme` re-exports
+ * them into Tailwind's `--color-*` / `--radius-*` namespaces. Keep that split —
+ * it means per-app theming can override `:root` at runtime without touching the
+ * `@theme` block, and the whole radius scale derives from a single `--radius`.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+:root {
+	/* Surfaces + text */
+	--background: #f4f2ee;
+	--foreground: #151515;
+	--surface: #fcfaf6;
+	--ink-soft: #5a5a58;
+	--ink-mute: #8c8b87;
+
+	/* Lines */
+	--line: rgb(21 21 21 / 0.08);
+	--line-strong: rgb(21 21 21 / 0.15);
+
+	/* Interactive. `--accent` is where a brand colour goes. */
+	--accent: #151515;
+	--accent-foreground: #f4f2ee;
+	--muted: rgb(21 21 21 / 0.04);
+	--ring: rgb(21 21 21 / 0.25);
+
+	/* Status */
+	--danger: #b42318;
+	--danger-foreground: #fef3f2;
+	--success: #067647;
+	--warning: #b54708;
+
+	/* One number drives the whole radius scale. */
+	--radius: 0.625rem;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--background: #121211;
+		--foreground: #f4f2ee;
+		--surface: #1b1b1a;
+		--ink-soft: #a3a29e;
+		--ink-mute: #787774;
+		--line: rgb(244 242 238 / 0.1);
+		--line-strong: rgb(244 242 238 / 0.18);
+		--accent: #f4f2ee;
+		--accent-foreground: #151515;
+		--muted: rgb(244 242 238 / 0.06);
+		--ring: rgb(244 242 238 / 0.3);
+		--danger: #f97066;
+		--danger-foreground: #1b1b1a;
+		--success: #47cd89;
+		--warning: #f79009;
+	}
+}
+
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-surface: var(--surface);
+	--color-ink-soft: var(--ink-soft);
+	--color-ink-mute: var(--ink-mute);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-muted: var(--muted);
+	--color-ring: var(--ring);
+	--color-danger: var(--danger);
+	--color-danger-foreground: var(--danger-foreground);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+	--radius-2xl: calc(var(--radius) * 1.8);
+
+	--font-sans:
+		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@layer base {
+	html {
+		background-color: var(--color-background);
+		color: var(--color-foreground);
+		font-family: var(--font-sans);
+		-webkit-text-size-adjust: 100%;
+	}
+
+	/* Visible focus everywhere. Never remove this without replacing it. */
+	:focus-visible {
+		outline: 2px solid var(--color-ring);
+		outline-offset: 2px;
+	}
+
+	::selection {
+		background-color: var(--color-line-strong);
+	}
+}

@@ -1,0 +1,154 @@
+name: starter
+
+# The starter's own CI. Deleted by `pnpm configure`, so it never runs in a
+# generated app.
+#
+# The product here is the GENERATOR, not any single app, so the job that matters
+# most is `preset`: it configures a fresh copy per profile and then runs that
+# app's own checks. A green `engine` job is necessary but nowhere near sufficient.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: starter-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  engine:
+    name: engine + base tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm lint
+      - run: pnpm test:unit
+      # The superset builds using the provisional adapter. If base stops
+      # building, we want to know on the PR that broke it, not in the matrix.
+      - run: pnpm build
+
+  determinism:
+    name: deterministic output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Configure the same manifest twice and diff, with no exclusions
+        run: |
+          set -euo pipefail
+          for n in a b; do
+            rm -rf "$RUNNER_TEMP/$n" && mkdir -p "$RUNNER_TEMP/$n"
+            # git archive respects .gitignore, so node_modules and .svelte-kit
+            # never come along. cp -r would drag both.
+            git archive HEAD | tar -x -C "$RUNNER_TEMP/$n"
+            cp scripts/configure/presets/_m0-turso-minimal.yml "$RUNNER_TEMP/$n/niftic.app.yml"
+            ( cd "$RUNNER_TEMP/$n" && SOURCE_DATE_EPOCH=0 \
+                node_modules/.bin/tsx scripts/configure/index.ts --yes --no-install )
+          done
+          # SOURCE_DATE_EPOCH pins the one non-deterministic field (generated.at),
+          # so this diff needs no exclusions at all.
+          diff -r "$RUNNER_TEMP/a" "$RUNNER_TEMP/b"
+
+  preset:
+    name: preset ${{ matrix.preset }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Implemented today.
+          - preset: _m0-turso-minimal
+            experimental: false
+          # Land with their milestones. Wired now, and expected to fail with
+          # E_MISSING_VARIANT until then — listed rather than omitted so the gap
+          # is visible on every run instead of being quietly forgotten.
+          - preset: turso # M1: auth, storage, admin, example
+            experimental: true
+          - preset: postgres # M2
+            experimental: true
+          - preset: sqlite # M3
+            experimental: true
+          - preset: static # M4
+            experimental: true
+          - preset: supabase # M5
+            experimental: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Configure a clean copy
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/app" && mkdir -p "$RUNNER_TEMP/app"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/app"
+          cp "scripts/configure/presets/${{ matrix.preset }}.yml" "$RUNNER_TEMP/app/niftic.app.yml"
+          cd "$RUNNER_TEMP/app"
+          # --no-install here; the generated app installs and verifies below so
+          # each step shows up as its own log section.
+          "$GITHUB_WORKSPACE/node_modules/.bin/tsx" scripts/configure/index.ts --yes --no-install
+
+      - name: The engine must not have touched the checkout
+        run: test -z "$(git status --porcelain)"
+
+      - name: Verify the generated app
+        working-directory: ${{ runner.temp }}/app
+        env:
+          # Enough to satisfy the generated env schema at build time. Never real.
+          TURSO_DATABASE_URL: 'file:./.data/ci.db'
+          ORIGIN: 'http://localhost:5173'
+          EMAIL_DRY_RUN: 'true'
+        run: |
+          set -euo pipefail
+          # NOT --frozen-lockfile: the merged package.json is deliberately a
+          # strict subset of the superset lock, and CI=true would otherwise make
+          # pnpm default to frozen and fail.
+          pnpm install --no-frozen-lockfile
+          pnpm check
+          pnpm lint
+          pnpm test:unit
+          pnpm build
+
+      - name: Nothing starter-only survived
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          for p in variants scripts/configure .github/workflows/starter-ci.yml .github/workflows/bootstrap.yml; do
+            if [ -e "$p" ]; then echo "::error::$p survived configure"; exit 1; fi
+          done
+          if grep -q '"configure"' package.json; then
+            echo "::error::the configure script survived in package.json"; exit 1
+          fi
+
+      - name: No credentials in the client bundle
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          if [ -d .svelte-kit/output/client ]; then
+            if grep -rlE 'RESEND_API_KEY|R2_SECRET_ACCESS_KEY|BETTER_AUTH_SECRET|SUPABASE_SERVICE_ROLE_KEY' \
+                 .svelte-kit/output/client 2>/dev/null; then
+              echo "::error::a server-only env name reached the client bundle"; exit 1
+            fi
+          fi
