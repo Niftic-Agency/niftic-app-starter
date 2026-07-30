@@ -77,6 +77,14 @@ function envModule(plan: Plan): string {
 	const seen = new Map<string, { required: boolean; note?: string }>();
 	for (const section of plan.env) {
 		for (const entry of section.vars) {
+			// PUBLIC_ variables are not in this module's world. SvelteKit excludes
+			// anything carrying the public prefix from `$env/dynamic/private` by
+			// design, so a PUBLIC_ field here can never be satisfied: validation
+			// fails on every request that touches env, no matter what the operator
+			// sets. They are read through `$env/dynamic/public` instead — on the
+			// server as well as in the browser — and still appear in .env.example,
+			// which is assembled from `plan.env` rather than from this list.
+			if (entry.name.startsWith('PUBLIC_')) continue;
 			// First declaration wins; sections are already in deterministic order.
 			if (!seen.has(entry.name)) {
 				seen.set(entry.name, { required: entry.required, note: entry.note });

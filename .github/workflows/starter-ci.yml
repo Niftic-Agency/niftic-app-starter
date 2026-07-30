@@ -103,7 +103,12 @@ jobs:
       - name: A repo created from the template, with a manifest committed
         run: |
           set -euo pipefail
-          git init -q --bare "$RUNNER_TEMP/remote.git"
+          # -b main on the BARE repo too. Without it the remote's HEAD points at
+          # whatever init.defaultBranch says — `master` on a runner — and since
+          # nothing is ever pushed there, `git clone` below checks out an empty
+          # tree and every assertion fails on a missing file instead of a wrong
+          # one.
+          git init -q --bare -b main "$RUNNER_TEMP/remote.git"
           rm -rf "$RUNNER_TEMP/repo" && mkdir -p "$RUNNER_TEMP/repo"
           git archive HEAD | tar -x -C "$RUNNER_TEMP/repo"
           cd "$RUNNER_TEMP/repo"
@@ -146,6 +151,10 @@ jobs:
           rm -rf "$RUNNER_TEMP/polled"
           git clone -q "$RUNNER_TEMP/remote.git" "$RUNNER_TEMP/polled"
           cd "$RUNNER_TEMP/polled"
+          # Said out loud, because an empty checkout passes every "is it gone?"
+          # assertion below and fails only the "is it there?" ones — which reads
+          # like a prune bug rather than a clone that produced nothing.
+          test -f package.json || { echo "::error::the clone is empty"; exit 1; }
 
           grep -qE '^generated:' niftic.app.yml
           test -f .github/workflows/ci.yml
@@ -408,8 +417,16 @@ jobs:
           failed=0
           for pkg in @libsql/client drizzle-orm drizzle-kit postgres better-auth \
                      aws4fetch @supabase/supabase-js; do
+            # Top level catches a declared dependency. pnpm's isolated layout puts
+            # a TRANSITIVE one under .pnpm/ and nowhere else, so checking only the
+            # top level answers a weaker question than the one this step asks —
+            # and would miss exactly the leak that arrives without being declared.
             if [ -e "node_modules/$pkg" ]; then
               echo "::error::$pkg is installed in a static app"
+              failed=1
+            fi
+            if compgen -G "node_modules/.pnpm/${pkg/\//+}@*" > /dev/null; then
+              echo "::error::$pkg reached a static app transitively"
               failed=1
             fi
           done

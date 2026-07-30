@@ -19,6 +19,27 @@ const restrictedSdkImports = [
 	}
 ];
 
+/**
+ * The Supabase branch's escalation boundary.
+ *
+ * Everything under `$lib/server/admin/` bypasses row level security, which on
+ * that branch means it bypasses authorization itself. Restricting the SDK is not
+ * enough to contain that: the service-role client is a LOCAL module, so without
+ * this any route could import it and skip every policy while still passing lint.
+ *
+ * So the direction is inverted from the SDK rules — instead of naming a package
+ * nobody may import, this names a local module nobody outside its own directory
+ * may hold. The privileged query goes in a module under `$lib/server/admin/` and
+ * the route calls it by name; the client itself never leaves.
+ */
+const serviceClientConfined = [
+	{
+		group: ['$lib/server/admin/service-client', '**/server/admin/service-client'],
+		message:
+			'The service-role client bypasses RLS. Put the privileged query in a module under $lib/server/admin/ and call that by name instead.'
+	}
+];
+
 export default ts.config(
 	js.configs.recommended,
 	...ts.configs.recommended,
@@ -34,7 +55,10 @@ export default ts.config(
 				'error',
 				{ argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
 			],
-			'no-restricted-imports': ['error', { paths: restrictedSdkImports }],
+			'no-restricted-imports': [
+				'error',
+				{ paths: restrictedSdkImports, patterns: serviceClientConfined }
+			],
 			// Env is read once, validated once. Everything else imports from there.
 			'no-restricted-properties': [
 				'error',
@@ -66,7 +90,9 @@ export default ts.config(
 	},
 	{
 		// The adapters themselves — the modules whose whole job is to wrap an SDK
-		// so nothing else has to import it.
+		// so nothing else has to import it. They may reach for their SDK; they
+		// still may not reach into the admin directory, so the rule is re-stated
+		// with only the pattern half rather than switched off.
 		files: [
 			'src/lib/server/email/**',
 			'src/lib/server/storage/**',
@@ -74,11 +100,14 @@ export default ts.config(
 			'src/lib/supabase-config.ts',
 			// A directory on the Supabase branch, because the server client ships
 			// alongside its health check.
-			'src/lib/server/supabase/**',
-			// The service-role client and everything allowed to use it. On the
-			// Supabase branch this is the only place RLS may be bypassed.
-			'src/lib/server/admin/**'
+			'src/lib/server/supabase/**'
 		],
+		rules: { 'no-restricted-imports': ['error', { patterns: serviceClientConfined }] }
+	},
+	{
+		// The one directory that may hold the service-role client — and therefore
+		// the one that may import it. Everything privileged lives here.
+		files: ['src/lib/server/admin/**'],
 		rules: { 'no-restricted-imports': 'off' }
 	},
 	{
@@ -97,8 +126,18 @@ export default ts.config(
 	},
 	{
 		ignores: [
+			// Everything tooling writes. This list must keep pace with
+			// `.prettierignore` — it fell behind once, and the symptom was that
+			// `pnpm build` followed by `pnpm lint` reported 912 errors in
+			// adapter-vercel's own output. CI never saw it because CI lints before
+			// it builds; a developer does the opposite.
 			'.svelte-kit/',
 			'build/',
+			'.vercel/',
+			'.data/',
+			'coverage/',
+			'test-results/',
+			'playwright-report/',
 			'node_modules/',
 			'drizzle/',
 			// Claude Code puts agent worktrees here. They are full copies of the

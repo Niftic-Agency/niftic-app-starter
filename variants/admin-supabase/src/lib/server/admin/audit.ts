@@ -31,3 +31,27 @@ export async function audit(entry: {
 
 	if (error) logger.error('audit.write_failed', { action: entry.action, error: error.message });
 }
+
+export interface AuditEntry {
+	id: string;
+	actor_email: string | null;
+	action: string;
+	target_type: string | null;
+	target_id: string | null;
+	created_at: string;
+}
+
+/**
+ * The most recent entries, newest first. Read through the service-role client
+ * for the same reason they are written through it: `audit_log` has no policies,
+ * so there is no user-scoped way to see it.
+ */
+export async function recentAuditEntries(limit = 100): Promise<AuditEntry[]> {
+	const { data } = await supabaseAdmin()
+		.from('audit_log')
+		.select('id, actor_email, action, target_type, target_id, created_at')
+		.order('created_at', { ascending: false })
+		.limit(limit);
+
+	return data ?? [];
+}

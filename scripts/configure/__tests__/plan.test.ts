@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { readTree } from '../apply';
+import { generate } from '../generate';
 import { applyPresetDefaults } from '../manifest';
 import { buildPlan, matchSelector, resolve, selectVariants, type TreeIndex } from '../plan';
 import { VARIANT_ORDER, type Manifest, type VariantId } from '../types';
@@ -506,6 +507,29 @@ describe('buildPlan', () => {
 		// The fork has no Drizzle dialect at all: its schema lives in SQL
 		// migrations and its types are generated from the database.
 		expect(result.value.resolved.dialect).toBe('none');
+	});
+
+	it('keeps PUBLIC_ variables out of the server env schema, and in .env.example', async () => {
+		// SvelteKit excludes anything carrying the public prefix from
+		// `$env/dynamic/private`, so a PUBLIC_ field in the server schema can never
+		// be satisfied — env() then throws on every request that touches it. The
+		// supabase fork is where this bites: two of its PUBLIC_ vars are required,
+		// and the app 500s on /api/health until they are out of this module.
+		const result = await planFor(manifest({ preset: 'supabase' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		// Fields, not prose — one of the notes legitimately says "never in a
+		// PUBLIC_ variable", and that sentence is worth keeping.
+		const serverEnv = generate('env-module', result.value, {});
+		expect(serverEnv).not.toMatch(/^\s*PUBLIC_\w+:/m);
+		expect(serverEnv).toMatch(/^\s*SUPABASE_SECRET_KEY:/m);
+
+		// Still requested from the operator — they are read through
+		// `$env/dynamic/public`, which needs them set just the same.
+		const example = generate('env-example', result.value, {});
+		expect(example).toContain('PUBLIC_SUPABASE_URL');
+		expect(example).toContain('PUBLIC_SUPABASE_PUBLISHABLE_KEY');
 	});
 
 	it('keeps the two branches apart — no Drizzle on the fork, no supabase off it', async () => {

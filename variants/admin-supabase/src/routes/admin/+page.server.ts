@@ -2,19 +2,17 @@ import { fail } from '@sveltejs/kit';
 import { z } from 'zod';
 import { requireRole } from '$lib/server/auth/permissions';
 import { audit } from '$lib/server/admin/audit';
-import { supabaseAdmin } from '$lib/server/admin/service-client';
-import { logger } from '$lib/server/logger';
+import { listProfiles, setProfileRole } from '$lib/server/admin/profiles';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
  * User management, reduced to what this branch actually has: roles.
  *
- * Reads and writes go through the SERVICE-ROLE client, which is the honest
- * answer rather than a shortcut — listing every profile is precisely the
- * operation RLS is built to prevent, and `profiles` deliberately has no policy
- * that would allow it. The escalation is contained: this file is inside
- * `$lib/server/admin/`, which is the only place ESLint permits the import, and
- * `requireRole` runs first in the load AND in every action.
+ * The privileged queries live in `$lib/server/admin/profiles`, not here. This
+ * route may not import the service-role client at all — ESLint refuses it, and
+ * that refusal is what keeps every RLS bypass on this branch inside one
+ * directory instead of wherever a screen last needed one. What this file owns is
+ * authorization: `requireRole` runs first in the load AND in every action.
  *
  * There is no ban here, unlike the Better Auth branch. Supabase owns the account
  * lifecycle; banning is `auth.admin.updateUserById` with a ban duration, and it
@@ -29,17 +27,7 @@ const roleSchema = z.object({
 export const load: PageServerLoad = async (event) => {
 	await requireRole(event, 'admin');
 
-	const { data, error } = await supabaseAdmin()
-		.from('profiles')
-		.select('user_id, email, display_name, role, created_at')
-		.order('email');
-
-	if (error) {
-		logger.error('admin.list_failed', { requestId: event.locals.requestId });
-		return { profiles: [] };
-	}
-
-	return { profiles: data };
+	return { profiles: await listProfiles(event.locals.requestId) };
 };
 
 export const actions: Actions = {
@@ -55,15 +43,12 @@ export const actions: Actions = {
 			return fail(400, { error: "You can't remove your own admin role." });
 		}
 
-		const { error } = await supabaseAdmin()
-			.from('profiles')
-			.update({ role: parsed.data.role, updated_at: new Date().toISOString() })
-			.eq('user_id', parsed.data.userId);
-
-		if (error) {
-			logger.error('admin.set_role_failed', { requestId: event.locals.requestId });
-			return fail(500, { error: 'That change was rejected.' });
-		}
+		const applied = await setProfileRole(
+			parsed.data.userId,
+			parsed.data.role,
+			event.locals.requestId
+		);
+		if (!applied) return fail(500, { error: 'That change was rejected.' });
 
 		await audit({
 			actor: { id: actor.id, email: actor.email },

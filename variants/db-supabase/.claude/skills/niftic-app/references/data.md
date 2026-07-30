@@ -10,9 +10,14 @@ silent — nothing throws, the query simply returns rows it should not have.
 - `supabase(event)` from `$lib/server/supabase` — the user-scoped client. The
   default for everything.
 - `$lib/server/admin/` — the service-role client. **Bypasses RLS entirely**, so
-  a query through it has skipped authorization. ESLint refuses to let anything
-  outside that directory import it, and the set of files inside it should stay
-  small enough to read in one sitting.
+  a query through it has skipped authorization.
+
+ESLint refuses `$lib/server/admin/service-client` to anything outside that
+directory. Privileged work goes in a module beside it — `profiles.ts`,
+`audit.ts` — and routes call those by name, so every query that skips RLS on
+this branch is in one directory, small enough to read in one sitting. A route
+that needs a new privileged operation adds a function there rather than reaching
+for the client.
 
 Reach for the service client only where there is no user to scope to — a
 scheduled job, a webhook, an admin screen that is authorized by role in code

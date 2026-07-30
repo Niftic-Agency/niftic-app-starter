@@ -1,7 +1,7 @@
 import { json, redirect } from '@sveltejs/kit';
 // `z.flattenError(err)` in Zod 4, not the `err.flatten()` of Zod 3.
 import { z } from 'zod';
-import { contactSchema } from '$lib/contact/schema';
+import { contactSchema, HONEYPOT_FIELD } from '$lib/contact/schema';
 import { env } from '$lib/server/env';
 import { logger } from '$lib/server/logger';
 import { sendEmail } from '$lib/server/email';
@@ -46,7 +46,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		logger.warn('contact.rejected', { requestId: locals.requestId });
 
 		if (wantsJson(request)) {
-			return json({ ok: false, errors: z.flattenError(parsed.error).fieldErrors }, { status: 400 });
+			const { [HONEYPOT_FIELD]: _trap, ...errors } = z.flattenError(parsed.error).fieldErrors;
+			// The trap's own error never goes back. Naming the field that caught a
+			// bot is the free advice the comment above refuses to give, and this is
+			// the one response path that would otherwise give it: a bot filling the
+			// honeypot gets the same shrug a human with an empty form gets.
+			return json({ ok: false, errors }, { status: 400 });
 		}
 		redirect(303, PROBLEM);
 	}

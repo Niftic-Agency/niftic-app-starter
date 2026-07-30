@@ -49,6 +49,7 @@ warnings before anything is written.
 | M4        | Static — prerendered shell + contact endpoint     | **done**  |
 | M5        | Supabase fork — RLS-first, policy tests           | **done³** |
 | M6        | Claude skill, docs, bootstrap round-trip          | **done⁴** |
+| M7        | The grill — §14's checklist on all five presets   | **done⁵** |
 
 ¹ **Not yet run against a real Postgres server.** The branch configures,
 typechecks, lints, unit-tests, builds, and its schema generates valid Postgres
@@ -84,6 +85,18 @@ remote carries a `generated:` block, the app's `ci.yml`, the skill — and none 
 setup reference. A second dispatch was refused. What has not happened is a real
 `workflow_dispatch` on a GitHub repo created from the template, which needs the
 template flag set on the repo and a provisioner to call it.
+
+⁵ **Five real findings, four of them things a green CI had been reporting as
+fine.** The worst: the Supabase profile returned 500 on every server request,
+because two `PUBLIC_` variables were required in a server env schema that
+SvelteKit can never populate. Nothing had caught it because nothing had ever
+sent a request to a Supabase app. Also fixed: the service-role import boundary
+was documented in three places and enforced in none; ESLint's ignore list had
+fallen behind `.prettierignore`, so `pnpm build` then `pnpm lint` produced 912
+errors; the static-lockfile check was blind to transitive dependencies; and the
+contact honeypot named itself in its error response. `docs/architecture.md` has
+the detail. Still not run from here: the real Vercel deploy (§14 item 3), and
+the container and policy-test drills, which need Docker.
 
 **M1 is complete, and `turso` with it** — it configures, installs, passes
 check/lint/test/build and its smokes, and is a required lane in the matrix. Seven

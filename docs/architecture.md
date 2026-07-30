@@ -455,6 +455,78 @@ template on GitHub and a provisioner to call the API, neither of which exists
 yet. What the CI job proves is the contract — configure, commit, push,
 self-delete, refuse a second run — not GitHub's dispatch plumbing.
 
+## What M7 found
+
+The grill is spec §14's checklist run against freshly generated apps of all five
+presets. Everything below was found by running something, not by reading it —
+and every one of them had survived a green CI run, because CI never did the
+thing that exposed it.
+
+**The Supabase profile 500'd on every server request.** `PUBLIC_SUPABASE_URL`
+and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` were required fields in the generated
+server env schema, and SvelteKit excludes anything carrying the public prefix
+from `$env/dynamic/private` by design — so `env()` threw on every request that
+touched it, no matter what the operator set. `/api/health` was a 500. The app
+code was never wrong: it reads those two through `$env/dynamic/public` in
+`supabase-config.ts`. The generator was, by putting every declared variable into
+the private schema. It now skips `PUBLIC_`-prefixed names, which still appear in
+`.env.example` because the public loader needs them just the same.
+
+Nothing caught this because nothing had ever sent a request to a Supabase app:
+the preset lane stops at `pnpm build`, and the integration lane's smokes sit
+behind a types-drift check that has never passed. `PUBLIC_APP_NAME` has the same
+shape on every other profile and is harmless only because it is optional.
+
+**The service-role import boundary was documented in three places and enforced
+in none.** `service-client.ts`, the skill reference and the README all said
+ESLint refused the import outside `$lib/server/admin/`. It did not: the rule
+restricts SDK _packages_, and the service client is a local module, so any route
+could import it and skip every policy while passing lint. Two admin routes
+already did — one of them under a comment asserting the opposite.
+
+Fixed on both sides: `no-restricted-imports` now carries a pattern confining
+`$lib/server/admin/service-client`, and the admin screens call named helpers
+(`listProfiles`, `setProfileRole`, `recentAuditEntries`) that live beside it. The
+first attempt banned the whole directory and broke those same screens, which is
+the useful shape of the rule — the client is confined, the privileged operations
+are callable.
+
+**`pnpm build` followed by `pnpm lint` reported 912 errors.** ESLint's ignore
+list had fallen behind `.prettierignore`: no `.vercel/`, and no `coverage/`,
+`test-results/` or `playwright-report/` either. CI lints before it builds, so CI
+never saw it; a developer does the opposite and sees it immediately.
+
+**The static-lockfile check asked a weaker question than it claimed.** It looked
+for `node_modules/<pkg>`, but pnpm's isolated layout puts a transitive
+dependency under `.pnpm/` and nowhere else — so the check could only ever catch
+a _declared_ one, which is not the leak worth worrying about. The ground truth
+turned out to be clean (no db, auth or storage package anywhere in a static
+app's tree, and zero mentions in its lockfile), so this was a check that passed
+for the wrong reason. It now searches both.
+
+**The honeypot named itself.** A bot filling `company_website` got
+`{"errors":{"company_website":["Rejected"]}}` — the exact free advice the
+schema's own comment refuses to give. The JSON path now strips the trap's error;
+genuine field errors still come back.
+
+## What M7 has and has not been run against
+
+Verified by running it, on all five presets: configure, install, check, lint,
+unit tests and build; nothing starter-only surviving; no canary credential in
+any client bundle. Booted with a real server and asked `/api/health`: turso and
+sqlite report healthy, static reports healthy, supabase reports `degraded` with
+an honest per-check breakdown (no local stack for storage). SQLite's database
+file was confirmed to be in WAL mode after boot. The contact endpoint was driven
+through valid, invalid, honeypot and missing-origin cases — 200, 400, 400, 403.
+Every legality rule was provoked and produced its own message.
+
+**Not run:** the real Vercel deploy of the turso preset (§14 item 3), which
+needs an account and real provisioned services. The container drill and the
+Supabase policy tests remain CI's to prove — no Docker on this machine. The
+skill's triggering behaviour (§14 item 10) is a property of a model reading a
+description, not something a shell can assert; what was checked is that its
+content covers the four refusals the item lists.
+
 ## A gap in the spec's legality rules
 
 Spec §3 rule 3 forbids `storage: r2` on the Supabase branch, to keep the fork
