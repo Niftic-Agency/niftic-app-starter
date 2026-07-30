@@ -1,0 +1,12 @@
+# M1 gate fixture: the internal (Google + domain allowlist) auth mode.
+name: M1 Internal Smoke
+slug: m1-internal-smoke
+description: Internal-mode app used to gate the authMode selector resolution.
+visibility: internal
+preset: turso
+authMode: internal
+storage: none
+admin: false
+example: false
+deployment:
+  productionUrl: https://m1-internal.example.com

@@ -1,0 +1,50 @@
+{
+  "description": "Better Auth on the Drizzle branches. Two modes, selected by authMode and resolved through the *.internal.ts / *.client.ts selector suffixes: `internal` is Google-only with a server-side domain allowlist, `client` is email/password with verification, reset and invitations.",
+  "dependencies": {
+    "better-auth": "1.6.25"
+  },
+  "env": [
+    {
+      "name": "BETTER_AUTH_SECRET",
+      "required": true,
+      "note": "openssl rand -base64 32. Rotating it invalidates every session. Previews MUST use their own."
+    },
+    {
+      "name": "BETTER_AUTH_URL",
+      "required": true,
+      "note": "Same origin the app is served from, or callbacks fail.",
+      "example": "http://localhost:5173"
+    },
+    {
+      "name": "AUTH_ALLOWED_DOMAINS",
+      "required": false,
+      "note": "internal mode only. Comma-separated email domains permitted to sign in.",
+      "example": "niftic.agency"
+    },
+    {
+      "name": "GOOGLE_CLIENT_ID",
+      "required": false,
+      "note": "Required in internal mode; optional in client mode."
+    },
+    {
+      "name": "GOOGLE_CLIENT_SECRET",
+      "required": false
+    }
+  ],
+  "registries": {
+    "hooks": [
+      {
+        "name": "handleAuth",
+        "from": "$lib/server/auth/hook",
+        "order": 20
+      }
+    ],
+    "nav": [
+      {
+        "name": "authNav",
+        "from": "$lib/nav/auth",
+        "order": 20
+      }
+    ]
+  }
+}

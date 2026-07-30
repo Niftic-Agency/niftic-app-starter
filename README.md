@@ -37,13 +37,15 @@ warnings before anything is written.
 | --------- | ------------------------------------------------ | ----------- |
 | M0        | Base app + configure engine + turso data/host    | **done**    |
 | M1        | Email module (`sendEmail`, templates, dry run)   | **done**    |
-| M1        | Better Auth, R2, admin, `notes`, seed, e2e       | next        |
+| M1        | Better Auth — both modes, guards, permissions    | **done**    |
+| M1        | R2 storage, admin shell, `notes`, seed, e2e      | next        |
 | M2–M5     | Postgres · SQLite+Litestream · Static · Supabase | not started |
 | M6        | Claude skill, docs, bootstrap round-trip         | not started |
 
-Only the `_m0-turso-minimal` preset configures cleanly today. The other five are
-wired into the matrix and fail with `E_MISSING_VARIANT` until their milestone
-lands — listed rather than hidden, so the gap stays visible.
+Three fixtures configure cleanly today — `_m0-turso-minimal`, `_m1-turso-auth`
+and `_m1-turso-internal` — and all three run in the matrix. The five named
+presets are wired in too and fail with `E_MISSING_VARIANT` until their milestone
+lands: listed rather than hidden, so the gap stays visible on every run.
 
 ## Docs
 

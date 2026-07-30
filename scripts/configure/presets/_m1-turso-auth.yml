@@ -1,0 +1,13 @@
+# M1 gate fixture: turso + Better Auth in client mode.
+# Storage, admin and the example feature arrive later in M1.
+name: M1 Auth Smoke
+slug: m1-auth-smoke
+description: Turso app with Better Auth, used to gate the auth variant.
+visibility: client
+preset: turso
+authMode: client
+storage: none
+admin: false
+example: false
+deployment:
+  productionUrl: https://m1-auth.example.com

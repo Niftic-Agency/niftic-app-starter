@@ -75,12 +75,16 @@ jobs:
       matrix:
         include:
           # Implemented today.
-          - preset: _m0-turso-minimal
+          - preset: _m0-turso-minimal # db + host only
+            experimental: false
+          - preset: _m1-turso-auth # + Better Auth, client mode
+            experimental: false
+          - preset: _m1-turso-internal # + Better Auth, internal mode
             experimental: false
           # Land with their milestones. Wired now, and expected to fail with
           # E_MISSING_VARIANT until then — listed rather than omitted so the gap
           # is visible on every run instead of being quietly forgotten.
-          - preset: turso # M1: auth, storage, admin, example
+          - preset: turso # M1 remainder: storage, admin, example
             experimental: true
           - preset: postgres # M2
             experimental: true
@@ -116,10 +120,17 @@ jobs:
       - name: Verify the generated app
         working-directory: ${{ runner.temp }}/app
         env:
-          # Enough to satisfy the generated env schema at build time. Never real.
+          # Enough to satisfy the generated env schema at build time. Never real —
+          # and deliberately distinctive, because the bundle check below greps for
+          # these exact VALUES.
           TURSO_DATABASE_URL: 'file:./.data/ci.db'
           ORIGIN: 'http://localhost:5173'
           EMAIL_DRY_RUN: 'true'
+          BETTER_AUTH_URL: 'http://localhost:5173'
+          BETTER_AUTH_SECRET: 'ci-canary-better-auth-secret-2f8a1c'
+          RESEND_API_KEY: 'ci-canary-resend-key-9d4b7e'
+          R2_SECRET_ACCESS_KEY: 'ci-canary-r2-secret-5a6c3f'
+          GOOGLE_CLIENT_SECRET: 'ci-canary-google-secret-71bd94'
         run: |
           set -euo pipefail
           # NOT --frozen-lockfile: the merged package.json is deliberately a
@@ -146,9 +157,21 @@ jobs:
         working-directory: ${{ runner.temp }}/app
         run: |
           set -euo pipefail
-          if [ -d .svelte-kit/output/client ]; then
-            if grep -rlE 'RESEND_API_KEY|R2_SECRET_ACCESS_KEY|BETTER_AUTH_SECRET|SUPABASE_SERVICE_ROLE_KEY' \
-                 .svelte-kit/output/client 2>/dev/null; then
-              echo "::error::a server-only env name reached the client bundle"; exit 1
+          [ -d .svelte-kit/output/client ] || exit 0
+
+          # Grep for the VALUES, not the names. Better Auth ships an isomorphic
+          # env shim whose getter keys literally include `BETTER_AUTH_SECRET`, so
+          # searching for names reports a leak that isn't one. A canary VALUE in
+          # the client bundle, on the other hand, is unambiguous.
+          failed=0
+          for canary in \
+            'ci-canary-better-auth-secret-2f8a1c' \
+            'ci-canary-resend-key-9d4b7e' \
+            'ci-canary-r2-secret-5a6c3f' \
+            'ci-canary-google-secret-71bd94'; do
+            if grep -rl -- "$canary" .svelte-kit/output/client 2>/dev/null; then
+              echo "::error::a server-only secret value reached the client bundle"
+              failed=1
             fi
-          fi
+          done
+          exit $failed
