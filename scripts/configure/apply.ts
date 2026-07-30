@@ -108,8 +108,11 @@ export async function readTree(root: string): Promise<TreeIndex> {
 
 		variants[id] = {
 			manifest,
-			// variant.json is metadata, not payload.
-			files: files.filter((f) => f !== 'variant.json')
+			// variant.json is metadata, and .gitkeep is the placeholder marker an
+			// unimplemented variant carries — neither is payload. Without the
+			// .gitkeep filter, two variants that still had one would collide on a
+			// file that should never have been copied in the first place.
+			files: files.filter((f) => f !== 'variant.json' && path.basename(f) !== '.gitkeep')
 		};
 	}
 

@@ -255,6 +255,24 @@ export function checkLegality(m: Manifest, lineOf: LineLookup = () => undefined)
 		});
 	}
 
+	// Rule 3 (consequence) — uploads are per-user by construction.
+	//
+	// Not stated as a numbered rule in the spec, but §7 is unambiguous about the
+	// flow: "server authenticates, validates type/size, issues a short-lived
+	// signed upload URL" and the key is `uploads/{userId}/…`. Without auth there
+	// is no userId to key by and no one to authorize a download against, so the
+	// whole storage design collapses into an open bucket.
+	if (m.storage !== 'none' && m.auth === 'none') {
+		errors.push({
+			code: 'E_STORAGE_AUTH',
+			rule: 3,
+			message: `storage: ${m.storage} requires auth to be enabled`,
+			why: 'Upload keys are namespaced by user id and downloads are authorized per user. With no auth there is nobody to attribute an upload to, and /api/files would hand any object to any caller.',
+			fix: ['set storage: none', 'set auth: better-auth'],
+			...at(['storage'])
+		});
+	}
+
 	// Rule 4 — orgs are a Better Auth plugin; the Supabase branch is
 	// single-tenant-with-roles in v1.
 	if (m.organizations && m.auth !== 'better-auth') {

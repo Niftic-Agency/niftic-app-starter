@@ -82,6 +82,19 @@ describe('legality rules', () => {
 		).toContain('E_STORAGE_SUPABASE_DATA');
 	});
 
+	it('rule 3 — storage requires auth, because uploads are keyed by user', () => {
+		expect(
+			codes(
+				manifest({
+					preset: 'turso',
+					auth: 'none',
+					admin: false,
+					storage: 'r2'
+				} as Partial<Manifest>)
+			)
+		).toContain('E_STORAGE_AUTH');
+	});
+
 	it('rule 4 — organizations require Better Auth', () => {
 		expect(
 			codes(manifest({ preset: 'supabase', organizations: true } as Partial<Manifest>))
@@ -178,19 +191,20 @@ describe('exhaustive axis sweep', () => {
 
 		expect(total).toBe(1440);
 
-		// 220 is derived by hand, not copied from a previous run — otherwise this
+		// 202 is derived by hand, not copied from a previous run — otherwise this
 		// assertion would just ratify whatever the code currently does.
+		// (It was 220 before storage started requiring auth.)
 		//
-		//   turso     host×2 · storage{r2,none}×2 · example×2 · replicas×2
-		//             auth=better-auth → orgs×2 · admin×2  = 64
-		//             auth=none        → orgs=F · admin=F   = 16   → 80
-		//   postgres  same shape                                    → 80
-		//   sqlite    host=dokploy, replicas=1                      → 20
-		//   supabase  auth=supabase-auth, storage{supabase,none},
-		//             orgs=F, host×2, admin×2                       → 32
-		//   none      auth=none, storage=none, admin=F, orgs=F,
-		//             host×2, example×2, replicas×2                 →  8
-		expect(legal).toBe(220);
+		//   turso     host×2 · example×2 · replicas×2 = 8 outer
+		//             auth=better-auth → storage{r2,none}×2 · orgs×2 · admin×2 = 8 → 64
+		//             auth=none        → storage=none, orgs=F, admin=F     = 1 →  8
+		//                                                                        → 72
+		//   postgres  same shape                                                 → 72
+		//   sqlite    host=dokploy, replicas=1 → outer 2                         → 18
+		//   supabase  auth=supabase-auth, storage{supabase,none}×2, orgs=F,
+		//             admin×2, host×2, example×2, replicas×2                     → 32
+		//   none      everything forced except host×2 · example×2 · replicas×2   →  8
+		expect(legal).toBe(202);
 	});
 
 	it('never accepts sqlite outside dokploy, or orgs without Better Auth', () => {
@@ -207,6 +221,8 @@ describe('exhaustive axis sweep', () => {
 			if (m.organizations) expect(m.auth).toBe('better-auth');
 			if (m.admin) expect(m.auth).not.toBe('none');
 			if (m.data === 'none') expect(m.storage).toBe('none');
+			// No anonymous uploads: there would be no user to key them by.
+			if (m.storage !== 'none') expect(m.auth).not.toBe('none');
 		}
 	});
 });

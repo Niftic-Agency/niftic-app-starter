@@ -1,0 +1,13 @@
+# M1 gate fixture: turso + Better Auth + R2 uploads.
+# Admin and the example feature are still to come.
+name: M1 Storage Smoke
+slug: m1-storage-smoke
+description: Turso app with auth and R2 uploads.
+visibility: client
+preset: turso
+authMode: client
+storage: r2
+admin: false
+example: false
+deployment:
+  productionUrl: https://m1-storage.example.com

@@ -88,6 +88,10 @@ jobs:
             experimental: false
             e2e: true
             seed: false
+          - preset: _m1-turso-storage # + R2 uploads
+            experimental: false
+            e2e: true
+            seed: true
           # Land with their milestones. Wired now, and expected to fail with
           # E_MISSING_VARIANT until then — listed rather than omitted so the gap
           # is visible on every run instead of being quietly forgotten.
@@ -175,6 +179,11 @@ jobs:
           GOOGLE_CLIENT_SECRET: 'ci-canary-google-secret-71bd94'
           ADMIN_EMAIL: 'admin@example.com'
           ADMIN_PASSWORD: 'ci-only-password-2f8a1c'
+          # Presigning is pure computation, so these never contact Cloudflare.
+          R2_ACCOUNT_ID: 'ci-fake-account'
+          R2_ACCESS_KEY_ID: 'ci-fake-key-id'
+          R2_SECRET_ACCESS_KEY: 'ci-canary-r2-secret-5a6c3f'
+          R2_BUCKET: 'nf-ci-assets'
         run: |
           set -euo pipefail
           mkdir -p .data

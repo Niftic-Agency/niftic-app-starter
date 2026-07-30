@@ -33,6 +33,9 @@
     "capabilityPaths": {
       "email": [
         "src/lib/server/email"
+      ],
+      "storage": [
+        "src/lib/server/storage"
       ]
     }
   },

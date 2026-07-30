@@ -1,0 +1,25 @@
+{
+  "description": "Cloudflare R2 behind the shared storage port. Presigning via aws4fetch rather than the AWS SDK — it is a few kilobytes and does exactly one thing. Bucket is private; downloads go through an authorized redirect, never a public URL.",
+  "dependencies": {
+    "aws4fetch": "1.0.20",
+    "ulid": "3.0.2"
+  },
+  "env": [
+    {
+      "name": "R2_ACCOUNT_ID",
+      "required": true,
+      "note": "Cloudflare account id — the subdomain of your r2.cloudflarestorage.com endpoint."
+    },
+    { "name": "R2_ACCESS_KEY_ID", "required": true },
+    { "name": "R2_SECRET_ACCESS_KEY", "required": true },
+    {
+      "name": "R2_BUCKET",
+      "required": true,
+      "note": "Private bucket, nf-{slug}-{env}-assets. Previews MUST use their own, or disable uploads.",
+      "example": "nf-my-app-prod-assets"
+    }
+  ],
+  "registries": {
+    "health": [{ "name": "storageCheck", "from": "$lib/server/storage/health", "order": 20 }]
+  }
+}

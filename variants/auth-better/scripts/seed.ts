@@ -1,7 +1,7 @@
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { eq } from 'drizzle-orm';
-import * as schema from '../src/lib/server/db/schema/index.ts';
+import * as schema from '../src/lib/server/db/schema/index';
 
 /**
  * `pnpm db:seed` — idempotent. Safe to run against production.

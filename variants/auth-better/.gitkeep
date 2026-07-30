@@ -1,3 +1,0 @@
-# Milestone placeholder. This variant is not implemented yet: configure will
-# refuse any manifest that selects it (E_MISSING_VARIANT) rather than emit a
-# half-built app.
