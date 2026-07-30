@@ -44,8 +44,17 @@ warnings before anything is written.
 | M1        | Admin shell — users, roles, bans, audit, settings | **done**    |
 | M1        | Note attachments through the storage port         | **done**    |
 | M1        | Organizations — membership, roles, invitations    | **done**    |
-| M2–M5     | Postgres · SQLite+Litestream · Static · Supabase  | not started |
+| M2        | Postgres — postgres-js, pooling rules, pg dialect | **done¹**   |
+| M3–M5     | SQLite+Litestream · Static · Supabase             | not started |
 | M6        | Claude skill, docs, bootstrap round-trip          | not started |
+
+¹ **Not yet run against a real Postgres server.** The branch configures,
+typechecks, lints, unit-tests, builds, and its schema generates valid Postgres
+DDL — all verified locally. Applying a migration, seeding, and the Playwright
+smokes happen in the `postgres-integration` CI job against a `postgres:17`
+service container, and that job has never executed: there is no GitHub remote
+yet, and the machine it was built on has neither Docker nor Postgres. Treat the
+first CI run as the real acceptance test for M2.
 
 **M1 is complete, and `turso` with it** — it configures, installs, passes
 check/lint/test/build and its smokes, and is a required lane in the matrix. Seven
@@ -58,7 +67,7 @@ authorization axis — membership and role inside an organization, checked
 alongside the user's own role — and requires `email: true`, because members join
 by invitation and an invitation has to be delivered.
 
-The other four named presets are wired into the matrix too and fail with
+`sqlite`, `static` and `supabase` are wired into the matrix too and fail with
 `E_MISSING_VARIANT` until their milestone lands: listed rather than hidden, so
 the gap stays visible on every run.
 
@@ -66,6 +75,9 @@ the gap stays visible on every run.
 
 - [docs/architecture.md](docs/architecture.md) — how the engine works, and the
   API surprises found while building it.
+- [docs/postgres-pooling.md](docs/postgres-pooling.md) — what transaction pooling
+  rules out, and why the Postgres client refuses to boot on a direct connection
+  string.
 - [CLAUDE.md](CLAUDE.md) — orientation for Claude Code.
 
 ## Requirements

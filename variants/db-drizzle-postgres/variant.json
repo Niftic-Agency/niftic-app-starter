@@ -1,0 +1,32 @@
+{
+  "description": "Postgres via postgres-js and Drizzle, always through a pooled endpoint. The client refuses to boot on a connection string shaped like a direct one, because from Vercel that failure only shows up under load — see docs/postgres-pooling.md.",
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.10"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:studio": "drizzle-kit studio"
+  },
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "required": true,
+      "note": "The POOLED endpoint, over TLS. PgDog listens on 6432. Never point this at a database's own port from Vercel — every function instance opens its own connection and the server runs out. Local development and CI use a loopback host, where the rule does not apply.",
+      "example": "postgres://app:password@pgdog.internal:6432/app?sslmode=require"
+    }
+  ],
+  "registries": {
+    "health": [
+      {
+        "name": "databaseCheck",
+        "from": "$lib/server/db/health",
+        "order": 10
+      }
+    ]
+  }
+}

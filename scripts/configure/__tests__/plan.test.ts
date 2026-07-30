@@ -297,14 +297,56 @@ describe('buildPlan', () => {
 		).toBe(false);
 	});
 
-	it('fails loudly when a selected variant has not been built yet', async () => {
-		// postgres needs db-drizzle-postgres, which lands in M2. Refusing beats
-		// emitting an app with no data layer.
+	it('plans the whole postgres preset — the M2 branch is complete', async () => {
 		const result = await planFor(manifest({ preset: 'postgres' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.resolved.variants).toEqual([
+			'db-drizzle-postgres',
+			'auth-better',
+			'storage-r2',
+			'admin-better',
+			'example-drizzle',
+			'host-vercel'
+		]);
+		// Every schema file resolves through the `pg` half of the dialect selector.
+		expect(result.value.resolved.dialect).toBe('pg');
+	});
+
+	it('resolves the pg half of every dialect pair, and copies no sqlite sibling', async () => {
+		const result = await planFor(manifest({ preset: 'postgres', organizations: true }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		const copies = result.value.ops.filter((op) => op.kind === 'copy');
+		const sqliteSources = copies.filter(
+			(op) => op.kind === 'copy' && /\.sqlite\.[a-z]+$/.test(op.from)
+		);
+		expect(sqliteSources).toEqual([]);
+
+		// ...and the tables really did arrive, from their `.pg.ts` siblings.
+		const schemaFiles = copies
+			.filter((op) => op.kind === 'copy' && op.to.startsWith('src/lib/server/db/schema/'))
+			.map((op) => (op.kind === 'copy' ? op.to : ''))
+			.sort();
+		expect(schemaFiles).toEqual([
+			'src/lib/server/db/schema/app-settings.ts',
+			'src/lib/server/db/schema/audit-log.ts',
+			'src/lib/server/db/schema/auth.ts',
+			'src/lib/server/db/schema/notes.ts',
+			'src/lib/server/db/schema/organization.ts',
+			'src/lib/server/db/schema/uploads.ts'
+		]);
+	});
+
+	it('fails loudly when a selected variant has not been built yet', async () => {
+		// sqlite needs db-sqlite-extras, which lands in M3. Refusing beats emitting
+		// an app whose data layer is half there.
+		const result = await planFor(manifest({ preset: 'sqlite' }));
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
 		expect(result.errors.every((e) => e.code === 'E_MISSING_VARIANT')).toBe(true);
-		expect(result.errors.map((e) => e.message).join(' ')).toContain('db-drizzle-postgres');
+		expect(result.errors.map((e) => e.message).join(' ')).toContain('db-sqlite-extras');
 	});
 });
 

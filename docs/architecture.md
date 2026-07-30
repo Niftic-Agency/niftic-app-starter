@@ -200,6 +200,47 @@ owner and does clear the active organization; and `acceptInvitation` moves the
 invitation `pending → accepted` in one transaction, so a double submit cannot
 produce two memberships.
 
+## Surprises found while building the Postgres branch
+
+**PgDog supports prepared statements in transaction mode.** This is the opposite
+of the PgBouncer-era assumption, and the reason `prepare: false` needed a better
+justification than the one everyone reaches for. PgDog caches each statement
+globally and maps names per client. The template still turns prepared statements
+off — see docs/postgres-pooling.md — but for reasons about serverless instance
+churn and pooler portability, not because it would break.
+
+**PgDog's defaults are port 6432 and `pooler_mode = transaction`**, which is what
+makes "a remote host on the default Postgres port" a usable signal for "this
+connection string is direct". That is the check `connection.ts` boots on.
+
+**postgres-js has no `run`.** The libSQL branch's health check is
+`db().run(sql\`select 1\`)`; postgres-js exposes `execute`. Outside the schema
+files, this is the only place the two Drizzle branches differ.
+
+**The seed script was silently dialect-locked.** It imported `@libsql/client`
+directly, so it could never have run on Postgres. Both db variants now ship a
+`scripts/db-connect.ts` — the seam that lets `seed.ts` be written once, since it
+runs under plain tsx where `$lib` does not resolve and so cannot use
+`src/lib/server/db`. `connection.ts` is deliberately free of `$lib` imports for
+the same reason: the scripts import `isLoopback` from it directly.
+
+## What M2 has and has not been run against
+
+Recorded here because CLAUDE.md's honesty clause requires it, and because the
+next person will otherwise assume the matrix is green.
+
+Verified locally: configure, `pnpm check` (0 errors), lint, unit tests including
+eight for the connection rules, `pnpm build`, and `drizzle-kit generate` — whose
+output was read and is valid Postgres, column-for-column identical to the libSQL
+branch. The shared `seed.ts` / `migrate.ts` refactor was re-verified end to end
+on the libSQL branch, including its 13 Playwright smokes.
+
+**Never run:** a migration applied to a Postgres server, a query executed, the
+seed script against Postgres, or the smokes on that branch. The
+`postgres-integration` CI job exists for exactly this and has not executed —
+there is no GitHub remote yet, and the machine has neither Docker nor Postgres.
+The first run of that job is M2's real acceptance test.
+
 ## A gap in the spec's legality rules
 
 Spec §3 rule 3 forbids `storage: r2` on the Supabase branch, to keep the fork

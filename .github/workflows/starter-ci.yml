@@ -38,6 +38,20 @@ jobs:
       # building, we want to know on the PR that broke it, not in the matrix.
       - run: pnpm build
 
+      # Spec §14: a direct Postgres connection string must not appear as an
+      # EXAMPLE anywhere. Prose telling you never to use one is fine, and so is
+      # the negative fixture in connection.test.ts — this looks for a remote
+      # `postgres://…:5432` that someone might copy.
+      - name: No direct Postgres connection string in docs or examples
+        run: |
+          set -euo pipefail
+          if grep -rnE 'postgres(ql)?://[^ "'"'"']*:5432' \
+               docs README.md variants/*/variant.json scripts/configure/presets \
+               2>/dev/null | grep -v 'localhost\|127\.0\.0\.1'; then
+            echo "::error::a direct Postgres connection string is being shown as an example"
+            exit 1
+          fi
+
   determinism:
     name: deterministic output
     runs-on: ubuntu-latest
@@ -108,13 +122,17 @@ jobs:
             experimental: false
             e2e: true
             seed: true
+          # Postgres configures, typechecks, lints, unit-tests and builds without
+          # a database. Everything that needs a live server — migrate, seed,
+          # smokes — is the `postgres-integration` job below, which is where the
+          # service container lives.
+          - preset: postgres # the shipped preset, complete
+            experimental: false
+            e2e: false
+            seed: false
           # Land with their milestones. Wired now, and expected to fail with
           # E_MISSING_VARIANT until then — listed rather than omitted so the gap
           # is visible on every run instead of being quietly forgotten.
-          - preset: postgres # M2
-            experimental: true
-            e2e: false
-            seed: false
           - preset: sqlite # M3
             experimental: true
             e2e: false
@@ -249,3 +267,79 @@ jobs:
             fi
           done
           exit $failed
+
+  postgres-integration:
+    name: postgres against a real server
+    runs-on: ubuntu-latest
+    # The heavy lane. The `preset: postgres` matrix entry above already proves
+    # the branch configures, typechecks, lints, unit-tests and builds on every
+    # PR; this one proves the SQL is real, and it needs a server to do it.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        # Without this the first migration races the server's own startup.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Configure a clean copy
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/app" && mkdir -p "$RUNNER_TEMP/app"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/app"
+          cp scripts/configure/presets/postgres.yml "$RUNNER_TEMP/app/niftic.app.yml"
+          cd "$RUNNER_TEMP/app"
+          "$GITHUB_WORKSPACE/node_modules/.bin/tsx" scripts/configure/index.ts --yes --no-install
+
+      - name: Migrate, seed and smoke against postgres:17
+        working-directory: ${{ runner.temp }}/app
+        env:
+          # A loopback host, so `connectionOptions` exempts it from the TLS and
+          # pooled-port rules — there is no pooler and no certificate here. That
+          # exemption is exactly what makes those rules testable by running them;
+          # `connection.test.ts` covers the refusals themselves.
+          DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/app'
+          ORIGIN: 'http://localhost:4173'
+          BETTER_AUTH_URL: 'http://localhost:4173'
+          BETTER_AUTH_SECRET: 'ci-canary-better-auth-secret-2f8a1c'
+          RESEND_API_KEY: 'ci-canary-resend-key-9d4b7e'
+          EMAIL_FROM: 'no-reply@example.com'
+          EMAIL_DRY_RUN: 'true'
+          ADMIN_EMAIL: 'admin@example.com'
+          ADMIN_PASSWORD: 'ci-only-password-2f8a1c'
+          R2_ACCOUNT_ID: 'ci-fake-account'
+          R2_ACCESS_KEY_ID: 'ci-fake-key-id'
+          R2_SECRET_ACCESS_KEY: 'ci-canary-r2-secret-5a6c3f'
+          R2_BUCKET: 'nf-ci-assets'
+        run: |
+          set -euo pipefail
+          pnpm install --no-frozen-lockfile
+          pnpm db:generate
+          pnpm db:migrate
+          pnpm db:seed
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+
+      - name: Upload the trace when a smoke fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-postgres-integration
+          path: ${{ runner.temp }}/app/test-results
+          retention-days: 7

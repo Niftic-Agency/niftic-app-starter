@@ -1,6 +1,5 @@
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
 import { eq } from 'drizzle-orm';
+import { connect } from './db-connect';
 import * as schema from '../src/lib/server/db/schema/index';
 
 /**
@@ -14,10 +13,13 @@ import * as schema from '../src/lib/server/db/schema/index';
  * the admin is created with no password and must use the reset-password flow —
  * which is the right production behaviour, because a seeded password is a
  * shared secret sitting in someone's shell history.
+ *
+ * Dialect-agnostic: the connection comes from `./db-connect`, which the selected
+ * database variant ships. Everything below is plain Drizzle that means the same
+ * thing on libSQL and on Postgres — which is the same discipline the repository
+ * layer follows, and what keeps the lite→postgres graduation mechanical.
  */
 
-const url = process.env.TURSO_DATABASE_URL ?? 'file:./.data/dev.db';
-const authToken = process.env.TURSO_AUTH_TOKEN;
 const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 const adminPassword = process.env.ADMIN_PASSWORD;
 
@@ -26,8 +28,7 @@ if (!adminEmail) {
 	process.exit(1);
 }
 
-const client = createClient({ url, ...(authToken ? { authToken } : {}) });
-const db = drizzle(client, { schema });
+const { db, close } = connect();
 
 const now = new Date();
 
@@ -93,4 +94,4 @@ for (const setting of defaults) {
 }
 
 console.log(`Seeded ${defaults.length} default settings.`);
-client.close();
+await close();
