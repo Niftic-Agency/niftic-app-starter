@@ -137,8 +137,6 @@ export function resolve(m: Manifest): ResolvedManifest {
 
 // ─── selector suffix resolution ──────────────────────────────────────────────
 
-const SUFFIX_RE = /^(.*)\.([a-z]+)(\.[a-z]+)$/;
-
 interface SelectorMatch {
 	group: SelectorGroup;
 	value: string;
@@ -146,20 +144,41 @@ interface SelectorMatch {
 	resolved: string;
 }
 
+function groupFor(segment: string): SelectorGroup | null {
+	for (const [group, values] of Object.entries(SELECTOR_GROUPS)) {
+		if ((values as readonly string[]).includes(segment)) return group as SelectorGroup;
+	}
+	return null;
+}
+
 /**
  * `schema.pg.ts` → group `dialect`, value `pg`, resolved `schema.ts`.
  * Returns null for a plain filename.
+ *
+ * Every dotted segment after the base name is checked, not just the one before
+ * the extension. Compound extensions are common here — `auth.internal.spec.ts`,
+ * `+page.server.client.ts` — and only looking at the last segment silently
+ * copied an internal-mode test into a client-mode app, which is how this rule
+ * got written.
+ *
+ * Selector values (`pg`, `sqlite`, `internal`, `client`) are specific enough
+ * that a false positive means the file really was meant to be branch-specific.
  */
 export function matchSelector(path: string): SelectorMatch | null {
-	const match = SUFFIX_RE.exec(path);
-	if (!match) return null;
-	const [, stem, value, ext] = match;
+	const slash = path.lastIndexOf('/');
+	const dir = slash === -1 ? '' : path.slice(0, slash + 1);
+	const filename = path.slice(slash + 1);
 
-	for (const [group, values] of Object.entries(SELECTOR_GROUPS)) {
-		if ((values as readonly string[]).includes(value)) {
-			return { group: group as SelectorGroup, value, resolved: `${stem}${ext}` };
-		}
+	const segments = filename.split('.');
+	// Never treat the base name itself as a selector, and never the extension.
+	for (let i = 1; i < segments.length - 1; i++) {
+		const group = groupFor(segments[i]);
+		if (!group) continue;
+
+		const resolved = dir + [...segments.slice(0, i), ...segments.slice(i + 1)].join('.');
+		return { group, value: segments[i], resolved };
 	}
+
 	return null;
 }
 

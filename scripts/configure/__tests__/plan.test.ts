@@ -69,6 +69,28 @@ describe('selector suffix resolution', () => {
 		// `.server.ts` is a SvelteKit convention, not one of our selectors.
 		expect(matchSelector('src/routes/+page.server.ts')).toBeNull();
 	});
+
+	it('finds a selector that is not the last segment before the extension', () => {
+		// Regression: only checking the final segment copied an internal-mode spec
+		// into a client-mode app, because `auth.internal.spec.ts` parses as
+		// base=`auth.internal`, selector=`spec`.
+		expect(matchSelector('tests/auth.internal.spec.ts')).toEqual({
+			group: 'authMode',
+			value: 'internal',
+			resolved: 'tests/auth.spec.ts'
+		});
+		expect(matchSelector('src/routes/login/+page.server.client.ts')).toEqual({
+			group: 'authMode',
+			value: 'client',
+			resolved: 'src/routes/login/+page.server.ts'
+		});
+	});
+
+	it('never treats the base filename as a selector', () => {
+		// A file genuinely called `client.ts` is a module, not a branch marker.
+		expect(matchSelector('src/lib/client.ts')).toBeNull();
+		expect(matchSelector('src/lib/pg.ts')).toBeNull();
+	});
 });
 
 describe('repository structure', () => {

@@ -38,6 +38,7 @@
   },
   "scripts": {
     "configure": "tsx scripts/configure/index.ts",
+    "prepare": "svelte-kit sync || echo ''",
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",

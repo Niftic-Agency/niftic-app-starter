@@ -3,7 +3,20 @@
   "dependencies": {
     "better-auth": "1.6.25"
   },
+  "scripts": {
+    "db:seed": "tsx scripts/seed.ts"
+  },
   "env": [
+    {
+      "name": "ADMIN_EMAIL",
+      "required": false,
+      "note": "Seeded as the first admin by `pnpm db:seed`. Re-running promotes an existing user."
+    },
+    {
+      "name": "ADMIN_PASSWORD",
+      "required": false,
+      "note": "Local dev and CI only. Omit in production — the admin sets a password through the reset flow instead."
+    },
     {
       "name": "BETTER_AUTH_SECRET",
       "required": true,

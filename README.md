@@ -38,7 +38,8 @@ warnings before anything is written.
 | M0        | Base app + configure engine + turso data/host    | **done**    |
 | M1        | Email module (`sendEmail`, templates, dry run)   | **done**    |
 | M1        | Better Auth — both modes, guards, permissions    | **done**    |
-| M1        | R2 storage, admin shell, `notes`, seed, e2e      | next        |
+| M1        | Seed script + Playwright smokes                  | **done**    |
+| M1        | R2 storage, admin shell, `notes` example         | next        |
 | M2–M5     | Postgres · SQLite+Litestream · Static · Supabase | not started |
 | M6        | Claude skill, docs, bootstrap round-trip         | not started |
 

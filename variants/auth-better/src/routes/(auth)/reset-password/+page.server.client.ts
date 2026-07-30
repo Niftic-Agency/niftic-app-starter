@@ -1,6 +1,6 @@
 import { APIError } from 'better-auth/api';
 import { fail, redirect } from '@sveltejs/kit';
-import { setError, superValidate } from 'sveltekit-superforms';
+import { message, superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { auth } from '$lib/server/auth';
@@ -31,7 +31,8 @@ export const actions: Actions = {
 			});
 		} catch (error) {
 			if (error instanceof APIError) {
-				return setError(form, '', 'That reset link is invalid or has expired. Request a new one.', {
+				// message(), not setError(form, ''), because the page renders $message.
+				return message(form, 'That reset link is invalid or has expired. Request a new one.', {
 					status: 400
 				});
 			}

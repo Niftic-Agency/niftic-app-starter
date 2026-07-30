@@ -74,26 +74,43 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Implemented today.
+          # Implemented today. `seed` marks the lanes that have a user table and
+          # therefore an admin to sign the auth smoke in as.
           - preset: _m0-turso-minimal # db + host only
             experimental: false
+            e2e: true
+            seed: false
           - preset: _m1-turso-auth # + Better Auth, client mode
             experimental: false
+            e2e: true
+            seed: true
           - preset: _m1-turso-internal # + Better Auth, internal mode
             experimental: false
+            e2e: true
+            seed: false
           # Land with their milestones. Wired now, and expected to fail with
           # E_MISSING_VARIANT until then — listed rather than omitted so the gap
           # is visible on every run instead of being quietly forgotten.
           - preset: turso # M1 remainder: storage, admin, example
             experimental: true
+            e2e: false
+            seed: false
           - preset: postgres # M2
             experimental: true
+            e2e: false
+            seed: false
           - preset: sqlite # M3
             experimental: true
+            e2e: false
+            seed: false
           - preset: static # M4
             experimental: true
+            e2e: false
+            seed: false
           - preset: supabase # M5
             experimental: true
+            e2e: false
+            seed: false
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -141,6 +158,42 @@ jobs:
           pnpm lint
           pnpm test:unit
           pnpm build
+
+      - name: Playwright smokes
+        if: matrix.e2e
+        working-directory: ${{ runner.temp }}/app
+        env:
+          TURSO_DATABASE_URL: 'file:./.data/ci.db'
+          ORIGIN: 'http://localhost:4173'
+          BETTER_AUTH_URL: 'http://localhost:4173'
+          BETTER_AUTH_SECRET: 'ci-canary-better-auth-secret-2f8a1c'
+          RESEND_API_KEY: 'ci-canary-resend-key-9d4b7e'
+          EMAIL_FROM: 'no-reply@example.com'
+          EMAIL_DRY_RUN: 'true'
+          AUTH_ALLOWED_DOMAINS: 'example.com'
+          GOOGLE_CLIENT_ID: 'ci-fake-client-id'
+          GOOGLE_CLIENT_SECRET: 'ci-canary-google-secret-71bd94'
+          ADMIN_EMAIL: 'admin@example.com'
+          ADMIN_PASSWORD: 'ci-only-password-2f8a1c'
+        run: |
+          set -euo pipefail
+          mkdir -p .data
+          # Only the lanes with a schema have migrations to run.
+          if [ -f drizzle.config.ts ]; then
+            pnpm db:generate
+            pnpm db:migrate
+          fi
+          if [ "${{ matrix.seed }}" = "true" ]; then pnpm db:seed; fi
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+
+      - name: Upload the trace when a smoke fails
+        if: failure() && matrix.e2e
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.preset }}
+          path: ${{ runner.temp }}/app/test-results
+          retention-days: 7
 
       - name: Nothing starter-only survived
         working-directory: ${{ runner.temp }}/app

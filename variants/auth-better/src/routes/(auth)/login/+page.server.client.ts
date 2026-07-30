@@ -1,6 +1,6 @@
 import { APIError } from 'better-auth/api';
 import { fail, redirect } from '@sveltejs/kit';
-import { setError, superValidate } from 'sveltekit-superforms';
+import { message, superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { auth } from '$lib/server/auth';
@@ -41,7 +41,9 @@ export const actions: Actions = {
 				});
 				// Deliberately identical for "no such user" and "wrong password":
 				// distinguishing them turns the form into an account enumerator.
-				return setError(form, '', 'That email or password is not right.', { status: 400 });
+				// Sent as a form message, not setError(form, ''), because the page
+				// renders $message — a form-level error would never be displayed.
+				return message(form, 'That email or password is not right.', { status: 400 });
 			}
 			throw error;
 		}
