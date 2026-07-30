@@ -1,0 +1,47 @@
+{
+  "description": "The Supabase fork's data layer: a user-scoped server client that is subject to RLS like any other caller, a browser client, and a service-role client walled off under $lib/server/admin/. Ships the RLS lint that fails a migration creating a table without enabling row level security in the same file.",
+  "dependencies": {
+    "@supabase/ssr": "0.12.4",
+    "@supabase/supabase-js": "2.111.0"
+  },
+  "devDependencies": {
+    "supabase": "2.110.0"
+  },
+  "scripts": {
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
+    "types:gen": "supabase gen types typescript --local > src/lib/database.types.ts",
+    "types:gen:linked": "supabase gen types typescript --linked > src/lib/database.types.ts",
+    "check:rls": "tsx scripts/check-rls.ts"
+  },
+  "env": [
+    {
+      "name": "PUBLIC_SUPABASE_URL",
+      "required": true,
+      "note": "Project URL. Public by design — it ships in the browser bundle.",
+      "example": "https://abcdefghijklmnop.supabase.co"
+    },
+    {
+      "name": "PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "required": true,
+      "note": "The sb_publishable_... key, which replaces the legacy anon key. Public by design: every query it makes is subject to row level security. If your project predates the new keys, the anon key still works here.",
+      "example": "sb_publishable_..."
+    },
+    {
+      "name": "SUPABASE_SECRET_KEY",
+      "required": false,
+      "note": "The sb_secret_... key, which replaces the legacy service_role key. BYPASSES row level security — server only, never in a PUBLIC_ variable, and only importable from $lib/server/admin/. Required for the admin screens and for seeding the storage bucket."
+    }
+  ],
+  "registries": {
+    "health": [
+      {
+        "name": "databaseCheck",
+        "from": "$lib/server/supabase/health",
+        "order": 10
+      }
+    ]
+  }
+}

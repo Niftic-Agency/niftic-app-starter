@@ -1,0 +1,6 @@
+{
+  "description": "Supabase Storage behind the shared storage port. Same routes and the same client-side flow as R2 — the browser PUTs to a short-lived signed URL. The bucket is private and its object policies check the owner out of the key path, so a signed URL is checked twice.",
+  "registries": {
+    "health": [{ "name": "storageCheck", "from": "$lib/server/storage/health", "order": 20 }]
+  }
+}

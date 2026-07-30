@@ -296,6 +296,56 @@ before writing a test against it: a `request.post` with no `Origin` gets 403
 before the handler runs. A browser always sends one. The smoke asserts both — the
 403 for a foreign origin, and the real behaviour with the right one.
 
+## Surprises found while building the Supabase fork
+
+The spec's §8.4 is the section that has aged worst, and it was right to say so.
+
+**`getSession()` must not be trusted, and `getUser()` is no longer the answer
+either.** `getSession()` decodes the access token out of a cookie without
+verifying it, so a forged cookie produces a forged user — Supabase's own types
+say this in as many words. The spec's fix was `getUser()`, a network round trip
+to the auth server on every request. **`getClaims()` supersedes both**: it
+verifies the JWT against the project's JWKS, locally via WebCrypto for projects
+on asymmetric signing keys, with the key set cached. Same guarantee as
+`getUser()`, a fraction of the latency, and it falls back to a server call on
+projects still using a symmetric secret — so it is never weaker.
+
+**`setAll` takes a second argument, and dropping it is a vulnerability.**
+`@supabase/ssr`'s cookie contract passes `headers` alongside the cookies to set:
+`Cache-Control: private, no-cache, no-store, must-revalidate, max-age=0`,
+`Expires: 0`, `Pragma: no-cache`. A response that sets an auth cookie without
+them can be cached by a CDN and then served — session token and all — to a
+different person. Most examples on the web predate this parameter.
+
+**The keys are `sb_publishable_…` and `sb_secret_…` now.** They replace the
+legacy `anon` and `service_role` JWTs, which still work but are being retired.
+The template uses the new names.
+
+**RLS filters, it does not reject** — which is why "the request returned 200"
+proves nothing on this branch. A `select` a policy forbids comes back as an
+empty result, not an error. Every assertion in the policy tests is on the ROWS
+for that reason, and the routes rely on the same property: `/api/files` answers
+404 for someone else's object because the policy made the row invisible, not
+because an `if` compared two ids.
+
+**The `with check` half of an update policy is the subtle one.** `using` decides
+which rows may be updated; `with check` decides what they may become. A policy
+with only `using` lets an owner hand their row to somebody else by rewriting
+`user_id`, and lets a `profiles` row grant itself a role. Both are asserted in
+the policy tests.
+
+**A `security definer` trigger needs `set search_path = ''`.** The
+`handle_new_user` trigger writes `public.profiles` from an `auth.users` insert,
+which means running as the owner — and a security-definer function that resolves
+names through a caller-controlled `search_path` is a privilege-escalation bug.
+
+**Two base-config gaps the fork exposed**, both fixed: the ESLint SDK boundary
+listed `src/lib/server/supabase.ts`, but the server client is a directory here
+(it ships with its health check); and `tests/**` was exempt from the `process.env`
+rule but not the import rule, which a policy test must break on purpose — it
+holds a publishable key the way an attacker would, deliberately bypassing the
+app's own clients.
+
 ## What M2 has and has not been run against
 
 Recorded here because CLAUDE.md's honesty clause requires it, and because the
@@ -332,6 +382,25 @@ Two things that job cannot tell you even when it goes green: anything about R2
 specifically (MinIO speaks the same S3 protocol, which is the point, but it is
 not the same service), and anything about Dokploy itself. The first real deploy
 is still the first real deploy.
+
+## What M5 has and has not been run against
+
+Verified locally: configure, `pnpm check` (0 errors), lint, unit tests, build —
+and **`pnpm check:rls`**, run against the four real migrations (pass) and against
+a deliberately unprotected `create table` (fail, exit 1, naming the table). That
+is one of spec §14's three acceptance criteria for M5, and it needs no Docker
+because it reads SQL rather than querying a database.
+
+**Never run:** `supabase start`, any migration, any query. No statement on this
+branch has reached a database, the policy tests have never executed, and the
+committed `database.types.ts` was written by hand to match the migrations rather
+than generated — the types-drift check in CI is what will prove whether it is
+right, and it is entirely possible that its first run fails on a detail of how
+the generator formats output.
+
+The `supabase-integration` job covers the rest: `check:rls` against real
+migrations, a proof that `check:rls` still FAILS a bad one, `supabase start` and
+`db reset`, the types-drift check, and the policy tests. It has not executed.
 
 ## A gap in the spec's legality rules
 

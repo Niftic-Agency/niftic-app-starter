@@ -425,14 +425,52 @@ describe('buildPlan', () => {
 		expect(removed).toContain('src/lib/server/storage');
 	});
 
-	it('fails loudly when a selected variant has not been built yet', async () => {
-		// supabase needs its own four variants, which land in M5. Refusing beats
-		// emitting an app whose data layer is half there.
+	it('plans the whole supabase preset — the M5 fork is complete', async () => {
 		const result = await planFor(manifest({ preset: 'supabase' }));
-		expect(result.ok).toBe(false);
-		if (result.ok) return;
-		expect(result.errors.every((e) => e.code === 'E_MISSING_VARIANT')).toBe(true);
-		expect(result.errors.map((e) => e.message).join(' ')).toContain('db-supabase');
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.resolved.variants).toEqual([
+			'db-supabase',
+			'auth-supabase',
+			'storage-supabase',
+			'admin-supabase',
+			'example-supabase',
+			'host-vercel'
+		]);
+		// The fork has no Drizzle dialect at all: its schema lives in SQL
+		// migrations and its types are generated from the database.
+		expect(result.value.resolved.dialect).toBe('none');
+	});
+
+	it('keeps the two branches apart — no Drizzle on the fork, no supabase off it', async () => {
+		const supabase = await planFor(manifest({ preset: 'supabase' }));
+		const turso = await planFor(manifest({ preset: 'turso' }));
+		expect(supabase.ok && turso.ok).toBe(true);
+		if (!supabase.ok || !turso.ok) return;
+
+		const deps = (plan: typeof supabase.value) => ({
+			...plan.packageJson.dependencies,
+			...plan.packageJson.devDependencies
+		});
+
+		const onFork = deps(supabase.value);
+		expect(onFork['@supabase/supabase-js']).toBeTruthy();
+		expect(onFork['drizzle-orm']).toBeUndefined();
+		expect(onFork['better-auth']).toBeUndefined();
+		expect(onFork['aws4fetch']).toBeUndefined();
+
+		const offFork = deps(turso.value);
+		expect(offFork['@supabase/supabase-js']).toBeUndefined();
+		expect(offFork['@supabase/ssr']).toBeUndefined();
+	});
+
+	it('has no unbuilt variant left in the matrix', async () => {
+		// Every named preset now plans. This assertion is what makes that real —
+		// and it is the one to change first when a sixth profile is added.
+		for (const preset of ['turso', 'postgres', 'sqlite', 'static', 'supabase'] as const) {
+			const result = await planFor(manifest({ preset }));
+			expect(result.ok, preset).toBe(true);
+		}
 	});
 });
 

@@ -65,14 +65,30 @@ export default ts.config(
 		}
 	},
 	{
-		// The adapters themselves, plus the one module allowed to read process.env.
+		// The adapters themselves — the modules whose whole job is to wrap an SDK
+		// so nothing else has to import it.
 		files: [
 			'src/lib/server/email/**',
 			'src/lib/server/storage/**',
 			'src/lib/supabase.ts',
-			'src/lib/server/supabase.ts',
+			'src/lib/supabase-config.ts',
+			// A directory on the Supabase branch, because the server client ships
+			// alongside its health check.
+			'src/lib/server/supabase/**',
+			// The service-role client and everything allowed to use it. On the
+			// Supabase branch this is the only place RLS may be bypassed.
 			'src/lib/server/admin/**'
 		],
+		rules: { 'no-restricted-imports': 'off' }
+	},
+	{
+		/**
+		 * Tests talk to the SDK directly on purpose. A policy test that went
+		 * through the app's own client would be testing the app; the point is to
+		 * hold a publishable key the way an attacker would and watch the DATABASE
+		 * refuse.
+		 */
+		files: ['tests/**'],
 		rules: { 'no-restricted-imports': 'off' }
 	},
 	{

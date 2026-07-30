@@ -1,7 +1,8 @@
 name: Supabase Preset
 slug: supabase-preset
-description: Canonical supabase app. A fork, not a variant.
+description: Canonical supabase app for the starter CI matrix.
 visibility: client
 preset: supabase
+authMode: client
 deployment:
   productionUrl: https://supabase-preset.example.com

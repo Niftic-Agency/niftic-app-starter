@@ -1,0 +1,6 @@
+{
+  "description": "The `notes` reference feature on the Supabase branch, mirroring the Drizzle one feature-for-feature. Adds what the Drizzle branch cannot have: policy tests that prove anon and a second user are refused by the DATABASE, not by an if-statement.",
+  "registries": {
+    "nav": [{ "name": "notesNav", "from": "$lib/nav/notes", "order": 20 }]
+  }
+}

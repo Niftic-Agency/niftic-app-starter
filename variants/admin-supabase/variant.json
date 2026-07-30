@@ -1,0 +1,6 @@
+{
+  "description": "Role-guarded /admin for the Supabase branch. Reduced to what this branch has: roles and an audit trail. Both go through the service-role client — listing every profile is exactly what RLS exists to prevent, so the escalation is explicit, confined to $lib/server/admin/, and re-authorized in every action.",
+  "registries": {
+    "nav": [{ "name": "adminNav", "from": "$lib/nav/admin", "order": 90 }]
+  }
+}

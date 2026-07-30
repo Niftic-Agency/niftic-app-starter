@@ -141,11 +141,11 @@ jobs:
             experimental: false
             e2e: true
             seed: false
-          # Lands with its milestone. Wired now, and expected to fail with
-          # E_MISSING_VARIANT until then — listed rather than omitted so the gap
-          # is visible on every run instead of being quietly forgotten.
-          - preset: supabase # M5
-            experimental: true
+          # The app half of the Supabase fork. Everything that needs the local
+          # stack — migrations, policy tests, the RLS check against a real
+          # database — is the `supabase-integration` job below.
+          - preset: supabase # the shipped preset, complete
+            experimental: false
             e2e: false
             seed: false
     steps:
@@ -545,3 +545,104 @@ jobs:
         run: |
           echo '--- app ---';   docker logs app   2>&1 | tail -100 || true
           echo '--- minio ---'; docker logs minio 2>&1 | tail -30  || true
+
+  supabase-integration:
+    name: supabase against the local stack
+    runs-on: ubuntu-latest
+    # The fork's heavy lane, and the only place spec §14's acceptance criteria
+    # for M5 can be met: `check:rls` against real migrations, and policy tests
+    # that hold a publishable key the way an attacker would and watch the
+    # DATABASE refuse. Needs Docker, which `supabase start` brings up.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Configure a clean copy
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/app" && mkdir -p "$RUNNER_TEMP/app"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/app"
+          cp scripts/configure/presets/supabase.yml "$RUNNER_TEMP/app/niftic.app.yml"
+          cd "$RUNNER_TEMP/app"
+          "$GITHUB_WORKSPACE/node_modules/.bin/tsx" scripts/configure/index.ts --yes --no-install
+          pnpm install --no-frozen-lockfile
+
+      # Before anything is applied. This is the check that catches the most
+      # dangerous mistake available on this branch, and it needs no database —
+      # so it runs first and fails fast.
+      - name: check:rls
+        working-directory: ${{ runner.temp }}/app
+        run: pnpm check:rls
+
+      - name: check:rls must FAIL a migration that forgets RLS
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          # A check that cannot fail is not a check. Prove it rejects the exact
+          # mistake it exists for, then take the bad migration away again.
+          cat > supabase/migrations/29990101000000_ci_bad.sql <<'SQL'
+          create table ci_unprotected (id uuid primary key, secret text not null);
+          SQL
+          if pnpm check:rls; then
+            echo "::error::check:rls passed a table with no row level security"
+            rm -f supabase/migrations/29990101000000_ci_bad.sql
+            exit 1
+          fi
+          rm -f supabase/migrations/29990101000000_ci_bad.sql
+          echo "check:rls correctly rejected it"
+
+      - name: Start the local stack and apply migrations
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          pnpm exec supabase start
+          pnpm exec supabase db reset --no-seed
+
+      - name: Export the local stack's keys
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          # `status -o env` prints the local anon/service keys. They are fixed
+          # development values, identical on every machine, and are not secrets.
+          pnpm exec supabase status -o env > /tmp/sb.env
+          . /tmp/sb.env
+          {
+            echo "PUBLIC_SUPABASE_URL=$API_URL"
+            echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
+            echo "SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Types must not have drifted from the schema
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          # Committed types that disagree with the schema are worse than none:
+          # they are confidently wrong, and every editor believes them.
+          cp src/lib/database.types.ts /tmp/types-committed.ts
+          pnpm types:gen
+          if ! diff -u /tmp/types-committed.ts src/lib/database.types.ts; then
+            echo "::error::src/lib/database.types.ts is stale — run pnpm types:gen and commit"
+            exit 1
+          fi
+
+      - name: Policy tests and smokes
+        working-directory: ${{ runner.temp }}/app
+        env:
+          ORIGIN: 'http://localhost:4173'
+          RESEND_API_KEY: 'ci-canary-resend-key-9d4b7e'
+          EMAIL_FROM: 'no-reply@example.com'
+          EMAIL_DRY_RUN: 'true'
+        run: |
+          set -euo pipefail
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+
+      - name: Stack logs on failure
+        if: failure()
+        working-directory: ${{ runner.temp }}/app
+        run: pnpm exec supabase status || true

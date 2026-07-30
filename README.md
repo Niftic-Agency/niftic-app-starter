@@ -47,7 +47,7 @@ warnings before anything is written.
 | M2        | Postgres — postgres-js, pooling rules, pg dialect | **done¹**   |
 | M3        | SQLite + Litestream + Dokploy container           | **done²**   |
 | M4        | Static — prerendered shell + contact endpoint     | **done**    |
-| M5        | Supabase                                          | not started |
+| M5        | Supabase fork — RLS-first, policy tests           | **done³**   |
 | M6        | Claude skill, docs, bootstrap round-trip          | not started |
 
 ¹ **Not yet run against a real Postgres server.** The branch configures,
@@ -67,6 +67,14 @@ and Litestream restore/replicate — because this machine has no Docker. The
 redeploy with data intact, destroy the volume and restore from the replica)
 against MinIO, and is likewise unrun.
 
+³ **The RLS check is verified; the local stack is not.** The fork configures,
+typechecks, lints, unit-tests and builds locally, and `pnpm check:rls` was run
+against the real migrations _and_ against a deliberately bad one, which it
+rejected — one of spec §14's three acceptance criteria for M5, met without
+Docker. The other two need `supabase start`: applying migrations, the policy
+tests, and the types-drift check all live in the `supabase-integration` CI job,
+which has never executed. No query on this branch has ever reached a database.
+
 **M1 is complete, and `turso` with it** — it configures, installs, passes
 check/lint/test/build and its smokes, and is a required lane in the matrix. Seven
 staged fixtures run alongside it, from `_m0-turso-minimal` (database and host
@@ -84,8 +92,15 @@ and the only server code that survives configure is `/api/health` and
 asserts that against the installed tree on every run, not just against
 `package.json`.
 
-`supabase` is wired into the matrix too and fails with `E_MISSING_VARIANT` until
-M5 lands: listed rather than hidden, so the gap stays visible on every run.
+**All five profiles now configure and pass their checks.** No preset is left
+failing with `E_MISSING_VARIANT`.
+
+On the Supabase fork, row level security _is_ the authorization layer. Server
+code uses a user-scoped client so its queries are policed by the same policies a
+browser query would be; the service-role client that bypasses them lives in
+`$lib/server/admin/` and ESLint refuses the import anywhere else. `pnpm
+check:rls` fails any migration that creates a table without enabling RLS in the
+same file.
 
 ## Docs
 

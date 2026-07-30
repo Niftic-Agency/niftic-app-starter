@@ -1,0 +1,15 @@
+{
+  "description": "Supabase Auth. The session is established by verifying the JWT with getClaims() rather than decoding a cookie with getSession() — the latter is forgeable and Supabase's own types say so. Roles live in a `profiles` table with no insert or update policy, so nothing holding a publishable key can mint one.",
+  "env": [
+    {
+      "name": "AUTH_ALLOWED_DOMAINS",
+      "required": false,
+      "note": "internal mode only. Comma-separated email domains permitted to sign in. Enforced on EVERY request, so removing a domain locks out sessions that already exist.",
+      "example": "niftic.agency"
+    }
+  ],
+  "registries": {
+    "hooks": [{ "name": "handleAuth", "from": "$lib/server/auth/hook", "order": 20 }],
+    "nav": [{ "name": "authNav", "from": "$lib/nav/auth", "order": 20 }]
+  }
+}
