@@ -402,6 +402,59 @@ The `supabase-integration` job covers the rest: `check:rls` against real
 migrations, a proof that `check:rls` still FAILS a bad one, `supabase start` and
 `db reset`, the types-drift check, and the policy tests. It has not executed.
 
+## The skill is pruned by the same machinery as the code
+
+Spec §9 says configure prunes the skill references that do not apply. It is
+worth writing down how, because the mechanism is not the one the plan assumed.
+
+The plan expected base to carry every reference and the engine to delete the
+irrelevant ones by directory. Instead each reference **ships from the variant
+that owns it** — `variants/db-supabase/.claude/skills/niftic-app/references/data.md`
+and so on — so the copy pass that already decides which code a profile gets
+decides which prose it gets too. There is no second list to keep in sync with
+the first, and adding a variant cannot forget to teach its own rules. It also
+matches the convention the per-variant `docs/` already established.
+
+Only one reference is genuinely a deletion: `references/setup.md`, the interview.
+It lives in base because it is about the unconfigured repo, and it is pruned by
+the run it describes. `docs/architecture.md` — this file — is pruned for the
+same reason: it documents an engine that no longer exists by the time anyone
+reads it in a generated app.
+
+`SKILL.md` itself is base and survives, so its capability-dependent procedures
+(add an upload, add a role) reach apps that have no storage and no auth. Rather
+than generate the file per profile, the skill states the rule that makes the
+dead parts inert: a procedure whose reference was pruned is a procedure this app
+has no use for. The static profile, where most of them are dead at once, ships a
+`static.md` that says what the profile _is_ instead of listing what it lacks.
+
+`CLAUDE.md` could not take the same route. The starter's own describes a
+superset and a configure engine, which is exactly wrong for a generated app, so
+it is the ninth generator: profile, stack, layout and rules assembled from the
+resolved manifest, and the command list read from the merged `package.json`
+rather than hand-kept — a CLAUDE.md that names a script the app does not have
+teaches the agent to distrust the rest of the page.
+
+## What M6 has and has not been run against
+
+Verified locally, for real: the **bootstrap round-trip**. A repo was built from
+this tree, a manifest committed, and `bootstrap.yml`'s own `run:` blocks —
+extracted from the file, not transcribed — executed against it. It configured,
+committed `chore: configure app (turso)` and pushed to a bare remote; a fresh
+clone of that remote carries the `generated:` block, the app's `ci.yml` and the
+skill, and carries none of `variants/`, the engine, either starter workflow,
+`docs/architecture.md` or `references/setup.md`. A second dispatch was refused by
+the guard. The same sequence runs in CI as the `bootstrap` job.
+
+Also verified locally: turso, supabase and static configure with the right
+references present and no others, and the generated `CLAUDE.md` describes the
+app rather than the starter.
+
+**Never run:** a real `workflow_dispatch`. That needs the repo marked as a
+template on GitHub and a provisioner to call the API, neither of which exists
+yet. What the CI job proves is the contract — configure, commit, push,
+self-delete, refuse a second run — not GitHub's dispatch plumbing.
+
 ## A gap in the spec's legality rules
 
 Spec §3 rule 3 forbids `storage: r2` on the Supabase branch, to keep the fork

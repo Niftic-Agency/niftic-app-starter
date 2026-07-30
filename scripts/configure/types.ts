@@ -212,7 +212,13 @@ export type GeneratorId =
 	 * db, auth, storage and the example feature all contribute tables — so it is
 	 * derived from the plan's own copy list rather than owned by any variant.
 	 */
-	| 'db-schema';
+	| 'db-schema'
+	/**
+	 * The generated app's orientation page. The starter's own CLAUDE.md describes
+	 * a superset and a configure engine that no longer exist by the time anyone
+	 * reads it, so it is rewritten rather than shipped.
+	 */
+	| 'claude-md';
 
 /**
  * Phase ordering. Variant-declared removals precede copies so remove/copy always

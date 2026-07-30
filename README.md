@@ -33,22 +33,22 @@ warnings before anything is written.
 
 ## Status
 
-| Milestone | Scope                                             | State       |
-| --------- | ------------------------------------------------- | ----------- |
-| M0        | Base app + configure engine + turso data/host     | **done**    |
-| M1        | Email module (`sendEmail`, templates, dry run)    | **done**    |
-| M1        | Better Auth — both modes, guards, permissions     | **done**    |
-| M1        | Seed script + Playwright smokes                   | **done**    |
-| M1        | R2 storage — signed upload/download, port + impl  | **done**    |
-| M1        | `notes` reference feature + full smoke path       | **done**    |
-| M1        | Admin shell — users, roles, bans, audit, settings | **done**    |
-| M1        | Note attachments through the storage port         | **done**    |
-| M1        | Organizations — membership, roles, invitations    | **done**    |
-| M2        | Postgres — postgres-js, pooling rules, pg dialect | **done¹**   |
-| M3        | SQLite + Litestream + Dokploy container           | **done²**   |
-| M4        | Static — prerendered shell + contact endpoint     | **done**    |
-| M5        | Supabase fork — RLS-first, policy tests           | **done³**   |
-| M6        | Claude skill, docs, bootstrap round-trip          | not started |
+| Milestone | Scope                                             | State     |
+| --------- | ------------------------------------------------- | --------- |
+| M0        | Base app + configure engine + turso data/host     | **done**  |
+| M1        | Email module (`sendEmail`, templates, dry run)    | **done**  |
+| M1        | Better Auth — both modes, guards, permissions     | **done**  |
+| M1        | Seed script + Playwright smokes                   | **done**  |
+| M1        | R2 storage — signed upload/download, port + impl  | **done**  |
+| M1        | `notes` reference feature + full smoke path       | **done**  |
+| M1        | Admin shell — users, roles, bans, audit, settings | **done**  |
+| M1        | Note attachments through the storage port         | **done**  |
+| M1        | Organizations — membership, roles, invitations    | **done**  |
+| M2        | Postgres — postgres-js, pooling rules, pg dialect | **done¹** |
+| M3        | SQLite + Litestream + Dokploy container           | **done²** |
+| M4        | Static — prerendered shell + contact endpoint     | **done**  |
+| M5        | Supabase fork — RLS-first, policy tests           | **done³** |
+| M6        | Claude skill, docs, bootstrap round-trip          | **done⁴** |
 
 ¹ **Not yet run against a real Postgres server.** The branch configures,
 typechecks, lints, unit-tests, builds, and its schema generates valid Postgres
@@ -74,6 +74,16 @@ rejected — one of spec §14's three acceptance criteria for M5, met without
 Docker. The other two need `supabase start`: applying migrations, the policy
 tests, and the types-drift check all live in the `supabase-integration` CI job,
 which has never executed. No query on this branch has ever reached a database.
+
+⁴ **The round-trip was run for real, locally; the dispatch itself was not.** A
+repo was created from this tree, a manifest committed and pushed to a bare
+remote, and `bootstrap.yml`'s own steps executed against it: it configured,
+committed `chore: configure app (turso)`, pushed, and a fresh clone of that
+remote carries a `generated:` block, the app's `ci.yml`, the skill — and none of
+`variants/`, the engine, either starter workflow, `docs/architecture.md` or the
+setup reference. A second dispatch was refused. What has not happened is a real
+`workflow_dispatch` on a GitHub repo created from the template, which needs the
+template flag set on the repo and a provisioner to call it.
 
 **M1 is complete, and `turso` with it** — it configures, installs, passes
 check/lint/test/build and its smokes, and is a required lane in the matrix. Seven
@@ -102,11 +112,26 @@ browser query would be; the service-role client that bypasses them lives in
 check:rls` fails any migration that creates a table without enabling RLS in the
 same file.
 
+## The skill
+
+`.claude/skills/niftic-app/` is how Claude Code works in a repo generated from
+this template — and in this one, before it is configured. `niftic.app.yml`
+decides which half applies: with no `generated:` block the skill runs the setup
+interview and then `pnpm configure`; afterwards it carries the procedures for
+adding a resource, a role, an admin screen, an upload or an email, and for
+reviewing security before a deploy.
+
+Its `references/` are pruned the same way everything else is, so a generated app
+is taught only its own stack: the Supabase fork gets the RLS rules and no
+Drizzle, a static site gets neither, and the setup interview — which can never
+run twice — is removed by the run that configures the app.
+
 ## Docs
 
 - [docs/architecture.md](docs/architecture.md) — how the engine works, and the
-  API surprises found while building it.
-- [CLAUDE.md](CLAUDE.md) — orientation for Claude Code.
+  API surprises found while building it. Starter-only; configure removes it.
+- [CLAUDE.md](CLAUDE.md) — orientation for Claude Code. A generated app gets its
+  own, written by configure from the profile it just built.
 
 Profile docs live in the variant that owns them, so an app only receives the ones
 that apply to it:

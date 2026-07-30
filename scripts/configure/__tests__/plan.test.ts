@@ -186,6 +186,72 @@ describe('buildPlan', () => {
 		);
 	});
 
+	it('takes the starter-only prose with it — engine docs and the setup interview', async () => {
+		const result = await planFor(manifest({ preset: 'turso' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		const pruned = result.value.ops.filter((op) => op.kind === 'prune').map((op) => op.path);
+		// Both describe machinery that configure deletes: architecture.md documents
+		// the engine, and setup.md is an interview that can never run again.
+		expect(pruned).toContain('docs/architecture.md');
+		expect(pruned).toContain('.claude/skills/niftic-app/references/setup.md');
+		// The skill itself stays. It is the app's, not the starter's.
+		expect(pruned).not.toContain('.claude/skills/niftic-app/SKILL.md');
+	});
+
+	it("rewrites CLAUDE.md rather than shipping the starter's orientation", async () => {
+		const result = await planFor(manifest({ preset: 'turso' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		const generated = result.value.ops.filter((op) => op.kind === 'generate').map((op) => op.to);
+		expect(generated).toContain('CLAUDE.md');
+	});
+
+	it('ships one branch reference per axis, from the variant that owns it', async () => {
+		const reference = (ops: { kind: string; to?: string; from?: string }[], name: string) =>
+			ops.find(
+				(op) => op.kind === 'copy' && op.to === `.claude/skills/niftic-app/references/${name}`
+			);
+
+		const turso = await planFor(manifest({ preset: 'turso' }));
+		const supabase = await planFor(manifest({ preset: 'supabase' }));
+		const still = await planFor(manifest({ preset: 'static' }));
+		expect(turso.ok && supabase.ok && still.ok).toBe(true);
+		if (!turso.ok || !supabase.ok || !still.ok) return;
+
+		// Each branch teaches its own stack and nobody else's.
+		expect(reference(turso.value.ops, 'data.md')).toMatchObject({
+			from: 'variants/db-drizzle-turso/.claude/skills/niftic-app/references/data.md'
+		});
+		expect(reference(supabase.value.ops, 'data.md')).toMatchObject({
+			from: 'variants/db-supabase/.claude/skills/niftic-app/references/data.md'
+		});
+		expect(reference(turso.value.ops, 'auth.md')).toMatchObject({
+			from: 'variants/auth-better/.claude/skills/niftic-app/references/auth.md'
+		});
+
+		// A static app has no database and no auth, so it is taught neither.
+		expect(reference(still.value.ops, 'data.md')).toBeUndefined();
+		expect(reference(still.value.ops, 'auth.md')).toBeUndefined();
+	});
+
+	it('teaches organizations only where they exist', async () => {
+		const on = await planFor(manifest({ preset: 'turso', organizations: true }));
+		const off = await planFor(manifest({ preset: 'turso', organizations: false }));
+		expect(on.ok && off.ok).toBe(true);
+		if (!on.ok || !off.ok) return;
+
+		const orgsDoc = (ops: { kind: string; to?: string }[]) =>
+			ops.some(
+				(op) => op.kind === 'copy' && op.to === '.claude/skills/niftic-app/references/orgs.md'
+			);
+
+		expect(orgsDoc(on.value.ops)).toBe(true);
+		expect(orgsDoc(off.value.ops)).toBe(false);
+	});
+
 	it('drops engine-only and unselected provisional dependencies', async () => {
 		const result = await planFor(
 			manifest({ preset: 'turso', auth: 'none', storage: 'none', admin: false, example: false })

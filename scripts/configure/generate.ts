@@ -319,6 +319,154 @@ ${body}
 `;
 }
 
+// ─── CLAUDE.md ───────────────────────────────────────────────────────────────
+
+/**
+ * The generated app's orientation page: one screen of stack, commands and layout,
+ * pointing at the skill for everything else.
+ *
+ * The commands come from the merged package.json rather than a hand-kept list,
+ * because a CLAUDE.md that names a script the app does not have is worse than no
+ * CLAUDE.md at all — the agent runs it, it fails, and the file loses its
+ * authority for everything else on the page.
+ */
+function claudeMd(plan: Plan): string {
+	const { manifest, profile, capabilities, dialect } = plan.resolved;
+
+	const stack: string[] = [
+		'SvelteKit 2 + Svelte 5 (runes only), TypeScript strict, Tailwind v4 (no config',
+		'file — tokens live in `src/app.css`), Zod 4 + sveltekit-superforms, Vitest,',
+		'Playwright. pnpm, Node 24.'
+	];
+
+	const line = (label: string, value: string) => `- **${label}** — ${value}`;
+	const profileLines: string[] = [];
+	if (manifest.data === 'turso') profileLines.push(line('Data', 'Turso (libSQL) through Drizzle'));
+	if (manifest.data === 'postgres')
+		profileLines.push(
+			line('Data', 'Postgres through Drizzle and postgres-js, pooled connections only')
+		);
+	if (manifest.data === 'sqlite')
+		profileLines.push(line('Data', 'SQLite on a volume through Drizzle, replicated by Litestream'));
+	if (manifest.data === 'supabase')
+		profileLines.push(
+			line('Data', 'Supabase Postgres, reached through supabase-js and policed by RLS')
+		);
+	if (manifest.data === 'none')
+		profileLines.push(line('Data', 'none. Every page is prerendered at build time'));
+
+	if (manifest.auth === 'better-auth')
+		profileLines.push(
+			line('Auth', `Better Auth, ${manifest.authMode} mode (\`src/lib/server/auth/\`)`)
+		);
+	if (manifest.auth === 'supabase-auth')
+		profileLines.push(line('Auth', `Supabase Auth, ${manifest.authMode} mode`));
+	if (capabilities.organizations)
+		profileLines.push(
+			line('Tenancy', 'organizations — every scoped query is filtered by membership')
+		);
+	if (manifest.storage !== 'none')
+		profileLines.push(
+			line(
+				'Storage',
+				`${manifest.storage === 'r2' ? 'Cloudflare R2' : 'Supabase Storage'} behind the storage port, signed URLs only`
+			)
+		);
+	if (capabilities.email) profileLines.push(line('Email', 'Resend behind `sendEmail()`'));
+	profileLines.push(line('Host', manifest.host === 'vercel' ? 'Vercel' : 'Dokploy'));
+
+	// Aligned pairs rather than hand-spaced strings: the descriptions differ per
+	// profile, so the column has to be computed or it drifts on every branch.
+	const paths: [string, string][] = [
+		['src/lib/components/', 'hand-rolled UI primitives — this is the component library'],
+		['src/lib/app-config.ts', "this app's profile and capability flags"]
+	];
+	if (capabilities.db && dialect !== 'none')
+		paths.push(['src/lib/server/db/', 'schema, client, and the repository layer']);
+	if (manifest.data === 'supabase') {
+		paths.push(['src/lib/server/supabase/', 'the USER-scoped client — subject to RLS']);
+		paths.push(['src/lib/server/admin/', 'the service-role client — bypasses RLS']);
+		paths.push(['supabase/migrations/', 'every table needs RLS and explicit policies']);
+	}
+	paths.push([
+		'src/routes/',
+		`(site) public · (app) authed${capabilities.admin ? ' · admin' : ''} · api`
+	]);
+
+	const column = Math.max(...paths.map(([p]) => p.length)) + 2;
+	const layout = paths.map(([p, description]) => p.padEnd(column) + description);
+
+	const rules: string[] = [
+		'- Mutations go through SvelteKit form actions with Zod validation. Authorization',
+		'  is re-checked server-side in every action — never trust a hidden field or a',
+		'  client-side guard.',
+		'- Never call a database, Resend, R2, or any service key from browser code.'
+	];
+	// One bullet, so the sentence about enforcement cannot drift away from the
+	// boundaries it is about.
+	const boundaries: string[] = [];
+	if (capabilities.email) boundaries.push('All email goes through `sendEmail()`.');
+	if (manifest.storage !== 'none')
+		boundaries.push('All uploads go through the storage port and signed URLs.');
+	if (boundaries.length > 0) {
+		rules.push(
+			`- ${boundaries.join(' ')} ESLint enforces ${boundaries.length > 1 ? 'both' : 'that'} boundar${boundaries.length > 1 ? 'ies' : 'y'}.`
+		);
+	}
+	rules.push('- Typed env comes from `$lib/server/env`. `process.env` is banned elsewhere.');
+	if (capabilities.db) rules.push('- Migrations are always committed.');
+	if (manifest.data === 'supabase')
+		rules.push(
+			'- No table without row level security and explicit policies. Regenerate',
+			'  `src/lib/database.types.ts` after every schema change.'
+		);
+	rules.push(
+		'- Never add a second auth library, ORM, validation library, or a component',
+		'  library. The primitives in `src/lib/components/` are the component library.',
+		'- Never print or commit credentials.'
+	);
+
+	const scripts = Object.entries(plan.packageJson.scripts).filter(([name]) => name !== 'prepare');
+	const scriptColumn = Math.max(...scripts.map(([name]) => name.length)) + 1;
+	const commands = scripts.map(([name, body]) => `pnpm ${name.padEnd(scriptColumn)} # ${body}`);
+
+	return `# ${manifest.name}
+
+${manifest.description}
+
+Generated from [niftic-app-starter](https://github.com/Niftic-Agency/niftic-app-starter) —
+the **${profile}** profile. Detailed rules and workflows live in the \`niftic-app\`
+skill (\`.claude/skills/niftic-app/\`). Read that before adding features.
+
+## Stack
+
+${stack.join('\n')}
+
+${profileLines.join('\n')}
+
+## Commands
+
+\`\`\`
+${commands.join('\n')}
+\`\`\`
+
+## Where things live
+
+\`\`\`
+${layout.join('\n')}
+\`\`\`
+
+## Rules that hold everywhere
+
+${rules.join('\n')}
+
+## Honesty about verification
+
+"Verified" in a commit message must mean you actually ran it. If you checked the
+code but not the running app, write "verified in code, not in browser".
+`;
+}
+
 // ─── dispatch ────────────────────────────────────────────────────────────────
 
 export function generate(
@@ -339,6 +487,8 @@ export function generate(
 			return svelteConfig(plan);
 		case 'db-schema':
 			return dbSchema(plan);
+		case 'claude-md':
+			return claudeMd(plan);
 		case 'registry:hooks':
 			return registryModule(plan.registries, {
 				registry: 'hooks',

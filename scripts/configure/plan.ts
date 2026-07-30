@@ -11,6 +11,7 @@ import {
 	type PackageMerge,
 	type Plan,
 	type RegistryEntry,
+	type RepoPath,
 	type ResolvedManifest,
 	type Result,
 	type SelectorGroup,
@@ -321,6 +322,7 @@ export function buildPlan(resolved: ResolvedManifest, tree: TreeIndex): Result<P
 
 	// ── pass 3: engine-generated files ───────────────────────────────────────
 	const generated: FileOp[] = [
+		{ kind: 'generate', to: 'CLAUDE.md', generator: 'claude-md' },
 		{ kind: 'generate', to: 'src/lib/app-config.ts', generator: 'app-config' },
 		{ kind: 'generate', to: 'src/lib/server/env.ts', generator: 'env-module' },
 		{ kind: 'generate', to: '.env.example', generator: 'env-example' },
@@ -364,8 +366,20 @@ export function buildPlan(resolved: ResolvedManifest, tree: TreeIndex): Result<P
 			reason: 'configure is one-way and self-erasing'
 		});
 	}
-	for (const file of ['.github/workflows/starter-ci.yml', '.github/workflows/bootstrap.yml']) {
-		ops.push({ kind: 'prune', path: file, recursive: false, reason: 'starter-only workflow' });
+	// Files outside those two trees that describe the starter rather than the app.
+	// Each one would otherwise arrive in a generated repo talking confidently
+	// about machinery that configure has just deleted.
+	const starterOnly: [RepoPath, string][] = [
+		['.github/workflows/starter-ci.yml', 'starter-only workflow'],
+		['.github/workflows/bootstrap.yml', 'starter-only workflow'],
+		['docs/architecture.md', 'documents the engine, not the app'],
+		[
+			'.claude/skills/niftic-app/references/setup.md',
+			'the interview only ever runs before configure'
+		]
+	];
+	for (const [file, reason] of starterOnly) {
+		ops.push({ kind: 'prune', path: file, recursive: false, reason });
 	}
 
 	// ── package.json ─────────────────────────────────────────────────────────

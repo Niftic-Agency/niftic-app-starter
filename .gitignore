@@ -10,3 +10,6 @@ node_modules
 .env.*
 !.env.example
 .DS_Store
+
+# Claude Code scratch space. `.claude/skills/` is tracked and ships with the app.
+/.claude/worktrees

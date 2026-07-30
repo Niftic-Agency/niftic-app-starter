@@ -84,6 +84,90 @@ jobs:
           # so this diff needs no exclusions at all.
           diff -r "$RUNNER_TEMP/a" "$RUNNER_TEMP/b"
 
+  bootstrap:
+    name: bootstrap round-trip
+    runs-on: ubuntu-latest
+    # apps.niftic.com's path: create a repo from this template, commit a
+    # manifest, dispatch bootstrap.yml, then poll for the commit. Everything
+    # except the dispatch itself is reproducible here — including the push,
+    # against a bare repo standing in for GitHub.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: A repo created from the template, with a manifest committed
+        run: |
+          set -euo pipefail
+          git init -q --bare "$RUNNER_TEMP/remote.git"
+          rm -rf "$RUNNER_TEMP/repo" && mkdir -p "$RUNNER_TEMP/repo"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/repo"
+          cd "$RUNNER_TEMP/repo"
+          cp scripts/configure/presets/turso.yml niftic.app.yml
+          git init -q -b main
+          git remote add origin "$RUNNER_TEMP/remote.git"
+          git add -A
+          git -c user.name=provisioner -c user.email=bot@niftic.agency \
+            commit -qm 'chore: commit the manifest'
+          git push -q -u origin main
+
+      # Run bootstrap.yml's OWN steps rather than a transcription of them. A
+      # transcription drifts, and the drift is invisible until a real dispatch
+      # fails on a customer's repo.
+      - name: Extract what the dispatch would run
+        # Stated rather than inherited: `yaml` resolves from the cwd, and this
+        # step is the only one in the job that needs the workspace's node_modules.
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "
+            import { readFileSync, writeFileSync } from 'node:fs';
+            import { parse } from 'yaml';
+            const wf = parse(readFileSync(process.env.GITHUB_WORKSPACE + '/.github/workflows/bootstrap.yml', 'utf8'));
+            const runs = wf.jobs.configure.steps.filter((s) => s.run).map((s) => s.run);
+            if (runs.length < 4) throw new Error('expected the guard, install, configure and commit steps');
+            writeFileSync(process.env.RUNNER_TEMP + '/bootstrap.sh', ['set -euo pipefail', ...runs].join('\n'));
+          "
+          cat "$RUNNER_TEMP/bootstrap.sh"
+
+      - name: Dispatch
+        working-directory: ${{ runner.temp }}/repo
+        run: bash "$RUNNER_TEMP/bootstrap.sh"
+
+      - name: What the provisioner polls for
+        run: |
+          set -euo pipefail
+          git -C "$RUNNER_TEMP/remote.git" log -1 --format=%s | grep -qx 'chore: configure app (turso)'
+
+          rm -rf "$RUNNER_TEMP/polled"
+          git clone -q "$RUNNER_TEMP/remote.git" "$RUNNER_TEMP/polled"
+          cd "$RUNNER_TEMP/polled"
+
+          grep -qE '^generated:' niftic.app.yml
+          test -f .github/workflows/ci.yml
+          test -f .claude/skills/niftic-app/SKILL.md
+          # The configuring commit is also the one that removes the bootstrapper,
+          # so the repo it lands in cannot be bootstrapped a second time.
+          for p in variants scripts/configure \
+                   .github/workflows/bootstrap.yml .github/workflows/starter-ci.yml \
+                   docs/architecture.md .claude/skills/niftic-app/references/setup.md; do
+            if [ -e "$p" ]; then echo "::error::$p survived the bootstrap"; exit 1; fi
+          done
+
+      - name: A second dispatch refuses
+        working-directory: ${{ runner.temp }}/polled
+        run: |
+          set -euo pipefail
+          if bash "$RUNNER_TEMP/bootstrap.sh"; then
+            echo "::error::a configured repo let itself be bootstrapped again"
+            exit 1
+          fi
+          echo "the guard held"
+
   preset:
     name: preset ${{ matrix.preset }}
     runs-on: ubuntu-latest
@@ -267,12 +351,50 @@ jobs:
         working-directory: ${{ runner.temp }}/app
         run: |
           set -euo pipefail
-          for p in variants scripts/configure .github/workflows/starter-ci.yml .github/workflows/bootstrap.yml; do
+          for p in variants scripts/configure \
+                   .github/workflows/starter-ci.yml .github/workflows/bootstrap.yml \
+                   docs/architecture.md \
+                   .claude/skills/niftic-app/references/setup.md; do
             if [ -e "$p" ]; then echo "::error::$p survived configure"; exit 1; fi
           done
           if grep -q '"configure"' package.json; then
             echo "::error::the configure script survived in package.json"; exit 1
           fi
+
+      - name: The skill shipped, and teaches only this app's stack
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          test -f .claude/skills/niftic-app/SKILL.md
+          # CLAUDE.md is regenerated, so it must not still be describing a
+          # superset and a configure engine that no longer exist.
+          if grep -qi 'variants/\|pnpm configure' CLAUDE.md; then
+            echo "::error::CLAUDE.md is still the starter's"; exit 1
+          fi
+          # References arrive with the variant that owns them. Nothing from
+          # another branch may be present.
+          echo "references: $(ls .claude/skills/niftic-app/references 2>/dev/null | tr '\n' ' ')"
+          case "${{ matrix.preset }}" in
+            static)
+              test -f .claude/skills/niftic-app/references/static.md
+              for taught in data.md auth.md orgs.md; do
+                if [ -e ".claude/skills/niftic-app/references/$taught" ]; then
+                  echo "::error::a static app was taught $taught"; exit 1
+                fi
+              done
+              ;;
+            supabase)
+              # The fork's whole security model. If this sentence is missing, the
+              # app shipped the Drizzle reference or none at all.
+              grep -q 'row level security' .claude/skills/niftic-app/references/data.md
+              ;;
+            *)
+              test -f .claude/skills/niftic-app/references/data.md
+              if grep -q 'row level security' .claude/skills/niftic-app/references/data.md; then
+                echo "::error::a Drizzle app shipped the Supabase reference"; exit 1
+              fi
+              ;;
+          esac
 
       # Spec §14: a static app's LOCKFILE must contain no database, auth or
       # storage package. Asserted against the installed tree rather than
