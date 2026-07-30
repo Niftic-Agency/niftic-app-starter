@@ -1,0 +1,12 @@
+{
+  "description": "Organizations on the Better Auth branches: membership, roles and invitations. Ships the tables, the second authorization axis (requireOrgRole) and the routes. The PLUGIN configuration deliberately lives in auth-better instead — Better Auth infers its API surface from the literal plugin tuple, so the list has to stay in one place and configure picks which literal via the `organizations` selector group.",
+  "registries": {
+    "nav": [
+      {
+        "name": "orgsNav",
+        "from": "$lib/nav/orgs",
+        "order": 40
+      }
+    ]
+  }
+}

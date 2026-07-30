@@ -1,0 +1,16 @@
+# M1 gate fixture: the turso spine plus organizations — the second authorization
+# axis (org membership on top of user role), which is where cross-tenant leaks
+# live. Runs alongside _m1-turso-full rather than replacing it, so a regression
+# points at whether orgs broke or the spine underneath it did.
+name: M1 Orgs Smoke
+slug: m1-orgs-smoke
+description: The turso spine with organizations.
+visibility: client
+preset: turso
+authMode: client
+organizations: true
+storage: r2
+admin: true
+example: true
+deployment:
+  productionUrl: https://m1-orgs.example.com

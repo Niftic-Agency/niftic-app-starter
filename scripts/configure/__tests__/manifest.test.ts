@@ -101,6 +101,16 @@ describe('legality rules', () => {
 		).toContain('E_ORGS_AUTH');
 	});
 
+	it('rule 4 — organizations require email, because members join by invitation', () => {
+		expect(
+			codes(manifest({ preset: 'turso', organizations: true, email: false } as Partial<Manifest>))
+		).toContain('E_ORGS_EMAIL');
+		// ...and the same manifest with email on is legal.
+		expect(codes(manifest({ preset: 'turso', organizations: true } as Partial<Manifest>))).toEqual(
+			[]
+		);
+	});
+
 	it('rule 5 — static mode forbids auth, storage and admin', () => {
 		const found = codes(
 			manifest({
@@ -161,8 +171,19 @@ describe('exhaustive axis sweep', () => {
 						for (const organizations of BOOL)
 							for (const admin of BOOL)
 								for (const example of BOOL)
-									for (const replicas of [1, 2])
-										yield { data, host, auth, storage, organizations, admin, example, replicas };
+									for (const email of BOOL)
+										for (const replicas of [1, 2])
+											yield {
+												data,
+												host,
+												auth,
+												storage,
+												organizations,
+												admin,
+												example,
+												email,
+												replicas
+											};
 	}
 
 	it('classifies every combination without throwing', () => {
@@ -179,7 +200,8 @@ describe('exhaustive axis sweep', () => {
 				storage: combo.storage,
 				organizations: combo.organizations,
 				admin: combo.admin,
-				example: combo.example
+				example: combo.example,
+				email: combo.email
 			});
 			m.deployment.provider = combo.host;
 			m.deployment.replicas = combo.replicas;
@@ -189,11 +211,15 @@ describe('exhaustive axis sweep', () => {
 			if (errors.length === 0) legal++;
 		}
 
-		expect(total).toBe(1440);
+		expect(total).toBe(2880);
 
-		// 202 is derived by hand, not copied from a previous run — otherwise this
+		// 332 is derived by hand, not copied from a previous run — otherwise this
 		// assertion would just ratify whatever the code currently does.
-		// (It was 220 before storage started requiring auth.)
+		// (It was 220 before storage started requiring auth, then 202, and the
+		// count doubled when `email` joined the sweep — it became a legality axis
+		// once organizations started requiring it.)
+		//
+		// First, ignoring email:
 		//
 		//   turso     host×2 · example×2 · replicas×2 = 8 outer
 		//             auth=better-auth → storage{r2,none}×2 · orgs×2 · admin×2 = 8 → 64
@@ -204,7 +230,17 @@ describe('exhaustive axis sweep', () => {
 		//   supabase  auth=supabase-auth, storage{supabase,none}×2, orgs=F,
 		//             admin×2, host×2, example×2, replicas×2                     → 32
 		//   none      everything forced except host×2 · example×2 · replicas×2   →  8
-		expect(legal).toBe(202);
+		//                                                                        = 202
+		//
+		// Then email doubles every one of those except where orgs is on, which
+		// pins email to true. The orgs=true half of each branch is:
+		//
+		//   turso 32 · postgres 32 · sqlite 8                                    = 72
+		//
+		// so 130 combinations take both email values and 72 take only one:
+		//
+		//   130 × 2 + 72                                                         = 332
+		expect(legal).toBe(332);
 	});
 
 	it('never accepts sqlite outside dokploy, or orgs without Better Auth', () => {
@@ -218,7 +254,11 @@ describe('exhaustive axis sweep', () => {
 				expect(m.host).toBe('dokploy');
 				expect(m.deployment.replicas).toBe(1);
 			}
-			if (m.organizations) expect(m.auth).toBe('better-auth');
+			if (m.organizations) {
+				expect(m.auth).toBe('better-auth');
+				// Invitations are the only way in, and they arrive by email.
+				expect(m.email).toBe(true);
+			}
 			if (m.admin) expect(m.auth).not.toBe('none');
 			if (m.data === 'none') expect(m.storage).toBe('none');
 			// No anonymous uploads: there would be no user to key them by.

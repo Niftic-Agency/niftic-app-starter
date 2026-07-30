@@ -7,6 +7,7 @@ import { appConfig } from '$lib/app-config';
 import { db, schema } from '$lib/server/db';
 import { env } from '$lib/server/env';
 import { modeOptions } from './mode';
+import { orgAdapterSchema, orgPlugins } from './plugins';
 import { drizzleProvider } from './provider';
 
 /**
@@ -30,7 +31,8 @@ function create() {
 				user: schema.user,
 				session: schema.session,
 				account: schema.account,
-				verification: schema.verification
+				verification: schema.verification,
+				...orgAdapterSchema
 			}
 		}),
 
@@ -47,9 +49,15 @@ function create() {
 			cookieCache: { enabled: true, maxAge: 60 * 5 }
 		},
 
+		// This array MUST stay a literal. Better Auth reads the tuple to build
+		// `auth.api` and the session type; widening it to BetterAuthPlugin[] takes
+		// `setRole`, `banUser` and `user.role` with it. `orgPlugins` is a tuple for
+		// the same reason — see ./plugins.orgs.ts.
 		plugins: [
 			// Powers /admin: list users, change role, ban.
 			admin({ defaultRole: 'user', adminRoles: ['admin'] }),
+			// Empty unless the app was configured with organizations.
+			...orgPlugins,
 			// Must be last — it writes Set-Cookie for cookies produced inside
 			// SvelteKit form actions, which otherwise get dropped.
 			sveltekitCookies(getRequestEvent)

@@ -35,7 +35,13 @@ export const session = pgTable('session', {
 		.references(() => user.id, { onDelete: 'cascade' }),
 
 	// admin plugin
-	impersonatedBy: text('impersonated_by')
+	impersonatedBy: text('impersonated_by'),
+
+	// organization plugin. Declared unconditionally and nullable, like
+	// `notes.attachment_key`: a column nobody writes costs one word of NULL per
+	// row, whereas making the session table itself branch on a capability would
+	// mean two variants owning one file.
+	activeOrganizationId: text('active_organization_id')
 });
 
 export const account = pgTable('account', {

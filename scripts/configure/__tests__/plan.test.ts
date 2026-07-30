@@ -99,6 +99,19 @@ describe('selector suffix resolution', () => {
 		});
 	});
 
+	it('resolves an organizations suffix — the axis whose value is derived', () => {
+		expect(matchSelector('src/lib/server/auth/plugins.orgs.ts')).toEqual({
+			group: 'organizations',
+			value: 'orgs',
+			resolved: 'src/lib/server/auth/plugins.ts'
+		});
+		expect(matchSelector('src/lib/server/auth/plugins.noorgs.ts')).toEqual({
+			group: 'organizations',
+			value: 'noorgs',
+			resolved: 'src/lib/server/auth/plugins.ts'
+		});
+	});
+
 	it('never treats the base filename as a selector', () => {
 		// A file genuinely called `client.ts` is a module, not a branch marker.
 		expect(matchSelector('src/lib/client.ts')).toBeNull();
@@ -244,6 +257,44 @@ describe('buildPlan', () => {
 			'example-drizzle',
 			'host-vercel'
 		]);
+	});
+
+	it('plans the turso preset with organizations, and picks the orgs plugin literal', async () => {
+		const result = await planFor(manifest({ preset: 'turso', organizations: true }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.resolved.variants).toContain('orgs');
+
+		// The whole point of the `organizations` selector group: exactly one of the
+		// two plugin literals lands on `plugins.ts`.
+		const copies = result.value.ops.filter(
+			(op) => op.kind === 'copy' && op.to === 'src/lib/server/auth/plugins.ts'
+		);
+		expect(copies).toHaveLength(1);
+		expect(copies[0].kind === 'copy' && copies[0].from).toBe(
+			'variants/auth-better/src/lib/server/auth/plugins.orgs.ts'
+		);
+	});
+
+	it('picks the no-organizations plugin literal when orgs are off', async () => {
+		const result = await planFor(manifest({ preset: 'turso' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.resolved.variants).not.toContain('orgs');
+
+		const copies = result.value.ops.filter(
+			(op) => op.kind === 'copy' && op.to === 'src/lib/server/auth/plugins.ts'
+		);
+		expect(copies).toHaveLength(1);
+		expect(copies[0].kind === 'copy' && copies[0].from).toBe(
+			'variants/auth-better/src/lib/server/auth/plugins.noorgs.ts'
+		);
+		// ...and no organization table comes along with it.
+		expect(
+			result.value.ops.some(
+				(op) => op.kind === 'copy' && op.to === 'src/lib/server/db/schema/organization.ts'
+			)
+		).toBe(false);
 	});
 
 	it('fails loudly when a selected variant has not been built yet', async () => {

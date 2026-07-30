@@ -64,7 +64,34 @@ catches a base rename orphaning an override.
 `schema.pg.ts` / `schema.sqlite.ts` resolve to `schema.ts` based on the data
 backend. Generalised past the spec's dialect rule into named selector groups, so
 `authMode` gets a home too (`routes.internal.ts` / `routes.client.ts`) instead of
-needing its own variant. One mechanism, two axes.
+needing its own variant. One mechanism, four axes now: `dialect`, `authMode`,
+`storage`, `organizations`.
+
+`organizations` is the odd one out twice over, and both oddities are deliberate.
+
+**Its value is derived, not read.** Every other group maps 1:1 to an axis value
+in the manifest; this one maps a boolean, so `selectorValueFor` computes
+`orgs` / `noorgs`.
+
+**It exists because the registry pattern cannot be used here.** Registries are
+how several variants contribute to one file everywhere else in this repo. For
+Better Auth plugins they do not work: Better Auth derives its whole API surface
+and session type from the **literal tuple** passed to `betterAuth()`. Typing that
+list as `BetterAuthPlugin[]` — which is what collecting it from a registry does —
+erases the inference, and `auth.api.setRole`, `auth.api.banUser` and `user.role`
+vanish with it. That was built, measured at four type errors across
+`permissions.ts`, `(app)/+layout.server.ts` and `admin/+page.server.ts`, and
+reverted.
+
+So the plugin list stays a literal in `auth.ts`, and `auth-better` ships two
+literals — `plugins.orgs.ts` and `plugins.noorgs.ts` — for configure to choose
+between. Spreading a tuple into an array literal preserves the tuple, so
+`[admin(…), ...orgPlugins, sveltekitCookies(…)]` keeps every inference intact.
+
+The consequence is that the organization plugin's **configuration** lives in
+`auth-better`, not in the `orgs` variant. That is arguably where it belongs: one
+plugin list, one place. The `orgs` variant owns the tables, the second
+authorization axis and the routes.
 
 ## Environment
 
@@ -118,6 +145,61 @@ Confirmed as spec'd, no change needed: drizzle-kit dialect `turso` with no
 admin and organization plugins at `better-auth/plugins`; `@tailwindcss/vite`
 before `sveltekit()` in the Vite config.
 
+## Surprises found while building organizations
+
+Verified against Better Auth 1.6.25 itself — the plugin's own schema object and
+route handlers — rather than the docs. Four of these are things the docs do not
+say, and two were only found by running the app.
+
+**The session cookie cache lies about the active organization.** `session.cookieCache`
+serves `getSession` from a signed cookie, and the plugin's `setActiveOrganization`
+writes the session row through `internalAdapter.updateSession`, which does not
+refresh that cookie. So `locals.session.activeOrganizationId` can name the
+previous organization for up to `cookieCache.maxAge` — long enough that creating
+an organization redirected straight back to the picker. The fix is not to disable
+the cache: `requireActiveOrgRole` reads the session ROW, joined to `member` in
+one query, so the active organization and the membership in it come from the same
+statement and cannot disagree. That query replaced the membership lookup that was
+going to happen anyway, so it costs nothing. `locals.session.token` is still fine
+to read — the cached copy and the row share it.
+
+**`removeMember` does not clear the removed member's `active_organization_id`.**
+A session can therefore point at an organization its owner is no longer in. This
+is exactly why membership is re-derived from the database on every guarded route
+rather than trusted from the session, and why an empty membership result sends
+the caller to the picker instead of to a 404.
+
+**`getInvitation` is recipient-only.** It refuses any session whose email is not
+the invited address — including the admin who sent the invitation. Cancelling one
+therefore cannot go through it; the members page re-scopes the invitation id
+through `getFullOrganization` instead.
+
+**`getFullOrganization` returns every invitation, id included, to any member.**
+The ids are what accept, reject and cancel take, so the members route withholds
+them from anyone below `admin`. For the same reason
+`requireEmailVerificationOnInvitation` is turned on: Better Auth's own guidance
+is to require it once invitation lists are exposed to members, and in both auth
+modes a verified address is already guaranteed.
+
+**Zod 4 applies `.trim()` to `z.email()` after validation, not before.**
+`z.email().trim().toLowerCase()` rejects a pasted `"  Person@Example.COM "`
+before it ever tidies it up. `z.string().trim().toLowerCase().pipe(z.email())`
+is the order a form wants. (On a plain `z.string()`, `.trim()` does run before
+the checks that follow it, which is why the slug field needs no pipe.)
+
+**SvelteKit's CSRF origin check only bites in a real build.** A form POST with no
+`Origin` header is answered 403 by `pnpm preview` and let through by `vite dev`.
+Both are worth asserting, and only the built one can assert the first — so the
+smoke posts twice, once without an origin and once with the right one, because
+only the second reaches our own guard.
+
+Also confirmed by reading the plugin: `createOrganization` requires a `slug`
+(it is not optional); the endpoint named `createInvitation` on `auth.api` is
+mounted at `/organization/invite-member`; `leaveOrganization` refuses the last
+owner and does clear the active organization; and `acceptInvitation` moves the
+invitation `pending → accepted` in one transaction, so a double submit cannot
+produce two memberships.
+
 ## A gap in the spec's legality rules
 
 Spec §3 rule 3 forbids `storage: r2` on the Supabase branch, to keep the fork
@@ -126,6 +208,14 @@ enforced: **`storage: supabase` requires `data: supabase`**
 (`E_STORAGE_SUPABASE_DATA`). Supabase Storage lives in the Supabase project and is
 governed by its RLS policies; on another data branch there is no project to hold
 the bucket and no policy layer to authorize it.
+
+Rule 4 gained the same kind of consequence: **`organizations: true` requires
+`email: true`** (`E_ORGS_EMAIL`). Invitation is how a second person joins an
+organization, the link carries a single-use invitation id, and
+`sendInvitationEmail` goes through `sendEmail()` — a module that does not exist
+in an app configured without email, so the import would not even resolve. Adding
+it made `email` a legality axis, so the exhaustive sweep now varies it too:
+2,880 combinations, 332 legal.
 
 The host × data matrix entries marked "not in v1" (supabase or static on Dokploy)
 are **warnings**, not errors — they are a support statement rather than a physical

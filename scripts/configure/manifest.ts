@@ -286,6 +286,25 @@ export function checkLegality(m: Manifest, lineOf: LineLookup = () => undefined)
 		});
 	}
 
+	// Rule 4 (consequence) — an invitation you cannot deliver is not an invitation.
+	//
+	// Not a numbered rule in the spec, and enforced for the same reason as
+	// "storage requires auth": the feature's only entry path depends on it.
+	// Invitation is how a second person joins an organization, the link is
+	// single-use and carries the invitation id, and `sendInvitationEmail` goes
+	// through `sendEmail()` — which does not exist in an app configured without
+	// email, so the import would not even resolve.
+	if (m.organizations && !m.email) {
+		errors.push({
+			code: 'E_ORGS_EMAIL',
+			rule: 4,
+			message: 'organizations: true requires email: true',
+			why: "Members join by invitation, and the invitation link is delivered by email. With email off there is no way to deliver one, and the org module's import of sendEmail() would not resolve.",
+			fix: ['set email: true', 'set organizations: false'],
+			...at(['email'])
+		});
+	}
+
 	// Rule 5 — static mode. Email survives for the contact endpoint.
 	if (m.data === 'none') {
 		if (m.auth !== 'none') {

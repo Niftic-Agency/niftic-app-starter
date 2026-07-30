@@ -100,6 +100,10 @@ jobs:
             experimental: false
             e2e: true
             seed: true
+          - preset: _m1-turso-orgs # + organizations: the second authz axis
+            experimental: false
+            e2e: true
+            seed: true
           - preset: turso # the shipped preset, now complete
             experimental: false
             e2e: true

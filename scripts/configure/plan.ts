@@ -190,6 +190,11 @@ function selectorValueFor(group: SelectorGroup, resolved: ResolvedManifest): str
 			return resolved.manifest.authMode;
 		case 'storage':
 			return resolved.manifest.storage;
+		case 'organizations':
+			// Derived, not read: the manifest field is a boolean. Every other group
+			// maps 1:1 to an axis value, so this is the one place a selector value
+			// is computed rather than looked up.
+			return resolved.manifest.organizations ? 'orgs' : 'noorgs';
 	}
 }
 

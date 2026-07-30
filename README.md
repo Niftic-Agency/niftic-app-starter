@@ -42,14 +42,21 @@ warnings before anything is written.
 | M1        | R2 storage — signed upload/download, port + impl  | **done**    |
 | M1        | `notes` reference feature + full smoke path       | **done**    |
 | M1        | Admin shell — users, roles, bans, audit, settings | **done**    |
-| M1        | Organizations, note attachments                   | next        |
+| M1        | Note attachments through the storage port         | **done**    |
+| M1        | Organizations — membership, roles, invitations    | **done**    |
 | M2–M5     | Postgres · SQLite+Litestream · Static · Supabase  | not started |
 | M6        | Claude skill, docs, bootstrap round-trip          | not started |
 
-**`turso` is complete** — it configures, installs, passes check/lint/test/build
-and its smokes, and is a required lane in the matrix. Six staged fixtures run
-alongside it, from `_m0-turso-minimal` (database and host only) upward, so a
-regression points at the layer that broke.
+**M1 is complete, and `turso` with it** — it configures, installs, passes
+check/lint/test/build and its smokes, and is a required lane in the matrix. Seven
+staged fixtures run alongside it, from `_m0-turso-minimal` (database and host
+only) up to `_m1-turso-orgs`, so a regression points at the layer that broke.
+
+Organizations are an opt-in axis rather than part of a preset: set
+`organizations: true` on any Better Auth profile. Doing so adds a second
+authorization axis — membership and role inside an organization, checked
+alongside the user's own role — and requires `email: true`, because members join
+by invitation and an invitation has to be delivered.
 
 The other four named presets are wired into the matrix too and fail with
 `E_MISSING_VARIANT` until their milestone lands: listed rather than hidden, so

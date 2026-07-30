@@ -31,7 +31,19 @@ export const SELECTOR_GROUPS = {
 	 * module. Needed because `has.storage` is a literal type: it can hide markup,
 	 * but it cannot make an import of a module that wasn't copied resolve.
 	 */
-	storage: ['r2', 'supabase', 'none']
+	storage: ['r2', 'supabase', 'none'],
+	/**
+	 * The first group whose value is DERIVED rather than read off an axis — the
+	 * manifest field is a boolean, so `selectorValueFor` maps it.
+	 *
+	 * It exists because Better Auth infers its entire API surface and session type
+	 * from the literal tuple handed to `betterAuth()`. A plugin registry — the
+	 * mechanism used for hooks, health, nav and the schema barrel — types that list
+	 * as `BetterAuthPlugin[]` and erases the inference, taking `auth.api.setRole`,
+	 * `auth.api.banUser` and `user.role` with it. So the plugin list stays a
+	 * literal, and this selector picks which literal.
+	 */
+	organizations: ['orgs', 'noorgs']
 } as const satisfies Record<string, readonly string[]>;
 
 export type SelectorGroup = keyof typeof SELECTOR_GROUPS;
