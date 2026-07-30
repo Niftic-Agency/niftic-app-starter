@@ -73,8 +73,12 @@ jobs:
             # never come along. cp -r would drag both.
             git archive HEAD | tar -x -C "$RUNNER_TEMP/$n"
             cp scripts/configure/presets/_m0-turso-minimal.yml "$RUNNER_TEMP/$n/niftic.app.yml"
+            ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/$n/node_modules"
             ( cd "$RUNNER_TEMP/$n" && SOURCE_DATE_EPOCH=0 \
                 node_modules/.bin/tsx scripts/configure/index.ts --yes --no-install )
+            # Unlink before the diff, or it compares two copies of the workspace's
+            # node_modules as well.
+            rm "$RUNNER_TEMP/$n/node_modules"
           done
           # SOURCE_DATE_EPOCH pins the one non-deterministic field (generated.at),
           # so this diff needs no exclusions at all.
@@ -164,9 +168,21 @@ jobs:
           git archive HEAD | tar -x -C "$RUNNER_TEMP/app"
           cp "scripts/configure/presets/${{ matrix.preset }}.yml" "$RUNNER_TEMP/app/niftic.app.yml"
           cd "$RUNNER_TEMP/app"
+          # The engine imports `yaml` and `zod`, and node resolves those from the
+          # directory of the script it is running — which is this copy, not the
+          # checkout. $RUNNER_TEMP is not under $GITHUB_WORKSPACE, so no upward
+          # walk reaches the installed tree either. Borrow the workspace's
+          # node_modules for the length of the run; a second superset install per
+          # lane would cost minutes across the matrix.
+          ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
           # --no-install here; the generated app installs and verifies below so
           # each step shows up as its own log section.
-          "$GITHUB_WORKSPACE/node_modules/.bin/tsx" scripts/configure/index.ts --yes --no-install
+          node_modules/.bin/tsx scripts/configure/index.ts --yes --no-install
+          # Unlink before anything else runs. From here on the app must resolve
+          # only what its OWN package.json installs — otherwise every assertion
+          # below about what a profile does and does not carry is worthless, and
+          # a variant that forgot to declare a dependency would still build.
+          rm node_modules
 
       - name: The engine must not have touched the checkout
         run: test -z "$(git status --porcelain)"
@@ -337,7 +353,11 @@ jobs:
           git archive HEAD | tar -x -C "$RUNNER_TEMP/app"
           cp scripts/configure/presets/postgres.yml "$RUNNER_TEMP/app/niftic.app.yml"
           cd "$RUNNER_TEMP/app"
-          "$GITHUB_WORKSPACE/node_modules/.bin/tsx" scripts/configure/index.ts --yes --no-install
+          # Borrowed for the length of the run, then unlinked — see the `preset`
+          # job for why both halves of that matter.
+          ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
+          node_modules/.bin/tsx scripts/configure/index.ts --yes --no-install
+          rm node_modules
 
       - name: Migrate, seed and smoke against postgres:17
         working-directory: ${{ runner.temp }}/app
@@ -411,7 +431,12 @@ jobs:
           git archive HEAD | tar -x -C "$RUNNER_TEMP/app"
           cp scripts/configure/presets/sqlite.yml "$RUNNER_TEMP/app/niftic.app.yml"
           cd "$RUNNER_TEMP/app"
-          "$GITHUB_WORKSPACE/node_modules/.bin/tsx" scripts/configure/index.ts --yes --no-install
+          # Borrowed for the length of the run, then unlinked — see the `preset`
+          # job. Here the unlink also keeps the symlink out of the docker build
+          # context two steps down.
+          ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
+          node_modules/.bin/tsx scripts/configure/index.ts --yes --no-install
+          rm node_modules
 
       - name: Start MinIO and create the backups bucket
         run: |
@@ -569,7 +594,12 @@ jobs:
           git archive HEAD | tar -x -C "$RUNNER_TEMP/app"
           cp scripts/configure/presets/supabase.yml "$RUNNER_TEMP/app/niftic.app.yml"
           cd "$RUNNER_TEMP/app"
-          "$GITHUB_WORKSPACE/node_modules/.bin/tsx" scripts/configure/index.ts --yes --no-install
+          # Borrowed for the length of the run, then unlinked — see the `preset`
+          # job. The unlink has to happen before the install below, which must
+          # start from an empty tree.
+          ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
+          node_modules/.bin/tsx scripts/configure/index.ts --yes --no-install
+          rm node_modules
           pnpm install --no-frozen-lockfile
 
       # Before anything is applied. This is the check that catches the most
