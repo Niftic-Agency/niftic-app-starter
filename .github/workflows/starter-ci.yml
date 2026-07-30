@@ -560,6 +560,19 @@ jobs:
           node_modules/.bin/tsx scripts/configure/index.ts --yes --no-install
           rm node_modules
 
+      - name: Generate the migrations the image expects to find committed
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          # A real app commits `drizzle/` — the entrypoint applies those files on
+          # boot, and the Dockerfile COPYs them into the runner. The starter
+          # cannot commit them, because the schema does not exist until a profile
+          # is chosen. So generate them here, into the build context, exactly
+          # where a developer's committed migrations would be.
+          pnpm install --no-frozen-lockfile
+          pnpm db:generate
+          test -d drizzle
+
       - name: Start MinIO and create the backups bucket
         run: |
           set -euo pipefail
@@ -769,6 +782,21 @@ jobs:
             echo "SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY"
           } >> "$GITHUB_ENV"
 
+      # Spec §14's acceptance criterion for M5, so it runs before the hygiene
+      # check below: a formatting difference in generated types must not be what
+      # stops anyone finding out whether the policies hold.
+      - name: Policy tests and smokes
+        working-directory: ${{ runner.temp }}/app
+        env:
+          ORIGIN: 'http://localhost:4173'
+          RESEND_API_KEY: 'ci-canary-resend-key-9d4b7e'
+          EMAIL_FROM: 'no-reply@example.com'
+          EMAIL_DRY_RUN: 'true'
+        run: |
+          set -euo pipefail
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+
       - name: Types must not have drifted from the schema
         working-directory: ${{ runner.temp }}/app
         run: |
@@ -782,17 +810,15 @@ jobs:
             exit 1
           fi
 
-      - name: Policy tests and smokes
-        working-directory: ${{ runner.temp }}/app
-        env:
-          ORIGIN: 'http://localhost:4173'
-          RESEND_API_KEY: 'ci-canary-resend-key-9d4b7e'
-          EMAIL_FROM: 'no-reply@example.com'
-          EMAIL_DRY_RUN: 'true'
-        run: |
-          set -euo pipefail
-          pnpm exec playwright install --with-deps chromium
-          pnpm test:e2e
+      # The file left on disk after that step IS the generator's output, so this
+      # hands over the exact bytes to commit rather than a diff to retype.
+      - name: Upload the generated types when they drift
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-types-generated
+          path: ${{ runner.temp }}/app/src/lib/database.types.ts
+          retention-days: 7
 
       - name: Stack logs on failure
         if: failure()
