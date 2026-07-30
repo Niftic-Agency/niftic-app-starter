@@ -1,0 +1,12 @@
+# M1 gate fixture: turso + Better Auth + R2 + the notes reference feature.
+name: M1 Example Smoke
+slug: m1-example-smoke
+description: Turso app with auth, uploads and the notes reference feature.
+visibility: client
+preset: turso
+authMode: client
+storage: r2
+admin: false
+example: true
+deployment:
+  productionUrl: https://m1-example.example.com

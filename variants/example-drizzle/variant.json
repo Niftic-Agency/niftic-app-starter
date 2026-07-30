@@ -1,0 +1,9 @@
+{
+  "description": "The `notes` reference feature. One complete vertical slice — schema, validation, repository, routes, permission checks, tests — that every new resource is cloned from. Deliberately boring: it is documentation that compiles.",
+  "dependencies": {
+    "ulid": "3.0.2"
+  },
+  "registries": {
+    "nav": [{ "name": "notesNav", "from": "$lib/nav/notes", "order": 20 }]
+  }
+}

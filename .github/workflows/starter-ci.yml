@@ -92,6 +92,10 @@ jobs:
             experimental: false
             e2e: true
             seed: true
+          - preset: _m1-turso-example # + the notes reference feature
+            experimental: false
+            e2e: true
+            seed: true
           # Land with their milestones. Wired now, and expected to fail with
           # E_MISSING_VARIANT until then — listed rather than omitted so the gap
           # is visible on every run instead of being quietly forgotten.
