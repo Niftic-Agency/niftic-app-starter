@@ -137,13 +137,13 @@ jobs:
             experimental: false
             e2e: true
             seed: true
-          # Land with their milestones. Wired now, and expected to fail with
+          - preset: static # the shipped preset, complete
+            experimental: false
+            e2e: true
+            seed: false
+          # Lands with its milestone. Wired now, and expected to fail with
           # E_MISSING_VARIANT until then — listed rather than omitted so the gap
           # is visible on every run instead of being quietly forgotten.
-          - preset: static # M4
-            experimental: true
-            e2e: false
-            seed: false
           - preset: supabase # M5
             experimental: true
             e2e: false
@@ -212,6 +212,9 @@ jobs:
           GOOGLE_CLIENT_SECRET: 'ci-canary-google-secret-71bd94'
           ADMIN_EMAIL: 'admin@example.com'
           ADMIN_PASSWORD: 'ci-only-password-2f8a1c'
+          # static lane only, and inert elsewhere. EMAIL_DRY_RUN above means the
+          # contact smoke logs its payload rather than mailing anyone.
+          CONTACT_TO: 'hello@example.com'
           # sqlite lane only, and inert elsewhere. This lane runs the APP against
           # a file; the container and its replica are the `container` job.
           DB_PATH: './.data/ci.db'
@@ -254,6 +257,25 @@ jobs:
           if grep -q '"configure"' package.json; then
             echo "::error::the configure script survived in package.json"; exit 1
           fi
+
+      # Spec §14: a static app's LOCKFILE must contain no database, auth or
+      # storage package. Asserted against the installed tree rather than
+      # package.json, because a transitive dependency would not show up there —
+      # and "we didn't declare it" is a weaker claim than "it isn't installed".
+      - name: A static app installs no db, auth or storage package
+        if: matrix.preset == 'static'
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          set -euo pipefail
+          failed=0
+          for pkg in @libsql/client drizzle-orm drizzle-kit postgres better-auth \
+                     aws4fetch @supabase/supabase-js; do
+            if [ -e "node_modules/$pkg" ]; then
+              echo "::error::$pkg is installed in a static app"
+              failed=1
+            fi
+          done
+          exit $failed
 
       - name: No credentials in the client bundle
         working-directory: ${{ runner.temp }}/app

@@ -153,7 +153,15 @@ function printNextSteps(plan: Plan): void {
 		console.log(`  ${index + 2}. ${step}`);
 	}
 
-	console.log(`\n${c.dim('Then ask Claude:')} "set up the database and run the first migration"\n`);
+	// The first prompt has to match the app that was actually generated — telling
+	// a prerendered marketing site to run its first migration is the kind of
+	// detail that makes someone distrust everything else on the screen.
+	const firstPrompt =
+		m.data === 'none'
+			? 'fill in the marketing pages and wire up the contact form'
+			: 'set up the database and run the first migration';
+
+	console.log(`\n${c.dim('Then ask Claude:')} "${firstPrompt}"\n`);
 }
 
 // ─── git guard ───────────────────────────────────────────────────────────────

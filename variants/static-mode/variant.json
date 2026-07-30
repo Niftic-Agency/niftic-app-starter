@@ -1,0 +1,20 @@
+{
+  "description": "The static profile: everything prerendered, and the only server code that survives is /api/health and /api/contact. Selected when `data: none`, which the legality rules already force to mean no auth, no storage and no admin — so the trimming is a consequence of the manifest rather than something this variant does.",
+  "env": [
+    {
+      "name": "CONTACT_TO",
+      "required": true,
+      "note": "Where the contact form is delivered. A real inbox — the form is the only way anyone reaches you on this profile.",
+      "example": "hello@example.com"
+    }
+  ],
+  "registries": {
+    "nav": [
+      {
+        "name": "contactNav",
+        "from": "$lib/nav/site",
+        "order": 10
+      }
+    ]
+  }
+}

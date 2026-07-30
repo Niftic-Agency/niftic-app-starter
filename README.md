@@ -46,7 +46,8 @@ warnings before anything is written.
 | M1        | Organizations — membership, roles, invitations    | **done**    |
 | M2        | Postgres — postgres-js, pooling rules, pg dialect | **done¹**   |
 | M3        | SQLite + Litestream + Dokploy container           | **done²**   |
-| M4–M5     | Static · Supabase                                 | not started |
+| M4        | Static — prerendered shell + contact endpoint     | **done**    |
+| M5        | Supabase                                          | not started |
 | M6        | Claude skill, docs, bootstrap round-trip          | not started |
 
 ¹ **Not yet run against a real Postgres server.** The branch configures,
@@ -77,9 +78,14 @@ authorization axis — membership and role inside an organization, checked
 alongside the user's own role — and requires `email: true`, because members join
 by invitation and an invitation has to be delivered.
 
-`static` and `supabase` are wired into the matrix too and fail with
-`E_MISSING_VARIANT` until their milestone lands: listed rather than hidden, so
-the gap stays visible on every run.
+The `static` profile is prerendered end to end: every page is HTML on the CDN,
+and the only server code that survives configure is `/api/health` and
+`/api/contact`. Its lockfile carries no database, auth or storage package — CI
+asserts that against the installed tree on every run, not just against
+`package.json`.
+
+`supabase` is wired into the matrix too and fails with `E_MISSING_VARIANT` until
+M5 lands: listed rather than hidden, so the gap stays visible on every run.
 
 ## Docs
 

@@ -377,14 +377,62 @@ describe('buildPlan', () => {
 		}
 	});
 
-	it('fails loudly when a selected variant has not been built yet', async () => {
-		// static needs static-mode, which lands in M4. Refusing beats emitting an
-		// app whose data layer is half there.
+	it('plans the whole static preset — the M4 branch is complete', async () => {
 		const result = await planFor(manifest({ preset: 'static' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.resolved.variants).toEqual(['static-mode', 'host-vercel']);
+		expect(result.value.resolved.dialect).toBe('none');
+	});
+
+	it('leaves a static app with no database, auth or storage dependency', async () => {
+		// Spec §14's acceptance criterion, asserted on the plan rather than on a
+		// lockfile: base carries only what EVERY profile has, so a dependency can
+		// only arrive through a variant this preset does not select.
+		const result = await planFor(manifest({ preset: 'static' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		const { dependencies, devDependencies } = result.value.packageJson;
+		const all = { ...dependencies, ...devDependencies };
+		for (const name of [
+			'@libsql/client',
+			'drizzle-orm',
+			'drizzle-kit',
+			'postgres',
+			'better-auth',
+			'aws4fetch',
+			'@supabase/supabase-js',
+			'ulid'
+		]) {
+			expect(all[name], name).toBeUndefined();
+		}
+
+		// ...and the email SDK DOES survive, because the contact endpoint needs it.
+		expect(dependencies.resend).toBeTruthy();
+	});
+
+	it('removes the base modules a static app has no use for', async () => {
+		const result = await planFor(manifest({ preset: 'static' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		const removed = result.value.ops
+			.filter((op) => op.kind === 'removeDir')
+			.map((op) => (op.kind === 'removeDir' ? op.path : ''));
+		// Storage lives in base behind a capability flag, so turning it off has to
+		// delete it explicitly — otherwise a site with no uploads ships the port.
+		expect(removed).toContain('src/lib/server/storage');
+	});
+
+	it('fails loudly when a selected variant has not been built yet', async () => {
+		// supabase needs its own four variants, which land in M5. Refusing beats
+		// emitting an app whose data layer is half there.
+		const result = await planFor(manifest({ preset: 'supabase' }));
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
 		expect(result.errors.every((e) => e.code === 'E_MISSING_VARIANT')).toBe(true);
-		expect(result.errors.map((e) => e.message).join(' ')).toContain('static-mode');
+		expect(result.errors.map((e) => e.message).join(' ')).toContain('db-supabase');
 	});
 });
 

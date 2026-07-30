@@ -262,6 +262,40 @@ fighting over `entrypoint.sh`, the one file branches on whether `litestream.yml`
 exists — which is precisely the thing that distinguishes them, since only
 `db-sqlite-extras` ships one.
 
+## Surprises found while building the static branch
+
+**A prerendered page cannot have a form action**, which is why the contact form
+posts to `/api/contact` rather than following the repo-wide "mutations go through
+form actions" rule. The departure is in the mechanism, not the substance: the
+payload is still Zod-validated server-side and the client-side schema is still
+only a courtesy. It also means superforms cannot be used on that page — it is
+built around a `+page.server.ts` returning form state, and there isn't one.
+
+**A static site has nowhere to render a server-side outcome.** With no JS, the
+endpoint cannot re-render the page you came from with an error on it. So success
+and failure each get a small prerendered page (`/contact/thanks`,
+`/contact/problem`) and the endpoint 303s to one of them; with JS the same
+endpoint answers JSON and the form renders the result inline and never navigates.
+Which one you get is decided by the `accept` header — a browser form post asks
+for HTML, our `fetch` asks for JSON.
+
+**`prerender = true` in the root layout cascades to endpoints too**, so
+`/api/health` and `/api/contact` each opt out explicitly. A prerendered POST
+handler fails the build rather than failing quietly, so a third server route that
+forgets the line is a loud mistake rather than a silent one.
+
+**Playwright counts an off-screen element as visible.** The honeypot is
+deliberately a real, rendered text input — `display:none` and `type="hidden"` are
+exactly what a bot skips — positioned far outside the viewport, `aria-hidden`,
+and out of the tab order. `toBeHidden()` fails on it, correctly; the smoke
+asserts the bounding box instead, which is the property that actually keeps it
+away from people.
+
+**The CSRF origin check applies to the contact endpoint**, which is worth knowing
+before writing a test against it: a `request.post` with no `Origin` gets 403
+before the handler runs. A browser always sends one. The smoke asserts both — the
+403 for a foreign origin, and the real behaviour with the right one.
+
 ## What M2 has and has not been run against
 
 Recorded here because CLAUDE.md's honesty clause requires it, and because the
