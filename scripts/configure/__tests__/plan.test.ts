@@ -217,12 +217,30 @@ describe('buildPlan', () => {
 		expect(result.value.registries.some((e) => e.name === 'emailCheck')).toBe(true);
 	});
 
-	it('fails loudly when a selected variant has not been built yet', async () => {
-		// The full turso preset pulls in auth/storage/admin/example, which land in M1.
+	it('plans the whole turso preset — the M1 spine is complete', async () => {
+		// Every variant this preset selects now exists: db, auth, storage, admin,
+		// example and host. This assertion is what makes the milestone real.
 		const result = await planFor(manifest({ preset: 'turso' }));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.resolved.variants).toEqual([
+			'db-drizzle-turso',
+			'auth-better',
+			'storage-r2',
+			'admin-better',
+			'example-drizzle',
+			'host-vercel'
+		]);
+	});
+
+	it('fails loudly when a selected variant has not been built yet', async () => {
+		// postgres needs db-drizzle-postgres, which lands in M2. Refusing beats
+		// emitting an app with no data layer.
+		const result = await planFor(manifest({ preset: 'postgres' }));
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
 		expect(result.errors.every((e) => e.code === 'E_MISSING_VARIANT')).toBe(true);
+		expect(result.errors.map((e) => e.message).join(' ')).toContain('db-drizzle-postgres');
 	});
 });
 

@@ -1,0 +1,15 @@
+{
+  "description": "Role-guarded /admin for the Better Auth branches. User management goes through the admin plugin rather than direct table writes, because banning has to revoke sessions too. Every mutation writes an audit_log row.",
+  "registries": {
+    "nav": [
+      {
+        "name": "adminNav",
+        "from": "$lib/nav/admin",
+        "order": 90
+      }
+    ]
+  },
+  "dependencies": {
+    "ulid": "3.0.2"
+  }
+}

@@ -49,7 +49,7 @@ function create() {
 
 		plugins: [
 			// Powers /admin: list users, change role, ban.
-			admin({ defaultRole: 'member', adminRoles: ['admin'] }),
+			admin({ defaultRole: 'user', adminRoles: ['admin'] }),
 			// Must be last — it writes Set-Cookie for cookies produced inside
 			// SvelteKit form actions, which otherwise get dropped.
 			sveltekitCookies(getRequestEvent)

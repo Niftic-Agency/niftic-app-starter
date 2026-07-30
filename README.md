@@ -33,22 +33,27 @@ warnings before anything is written.
 
 ## Status
 
-| Milestone | Scope                                            | State       |
-| --------- | ------------------------------------------------ | ----------- |
-| M0        | Base app + configure engine + turso data/host    | **done**    |
-| M1        | Email module (`sendEmail`, templates, dry run)   | **done**    |
-| M1        | Better Auth — both modes, guards, permissions    | **done**    |
-| M1        | Seed script + Playwright smokes                  | **done**    |
-| M1        | R2 storage — signed upload/download, port + impl | **done**    |
-| M1        | `notes` reference feature + full smoke path      | **done**    |
-| M1        | Admin shell, organizations, note attachments     | next        |
-| M2–M5     | Postgres · SQLite+Litestream · Static · Supabase | not started |
-| M6        | Claude skill, docs, bootstrap round-trip         | not started |
+| Milestone | Scope                                             | State       |
+| --------- | ------------------------------------------------- | ----------- |
+| M0        | Base app + configure engine + turso data/host     | **done**    |
+| M1        | Email module (`sendEmail`, templates, dry run)    | **done**    |
+| M1        | Better Auth — both modes, guards, permissions     | **done**    |
+| M1        | Seed script + Playwright smokes                   | **done**    |
+| M1        | R2 storage — signed upload/download, port + impl  | **done**    |
+| M1        | `notes` reference feature + full smoke path       | **done**    |
+| M1        | Admin shell — users, roles, bans, audit, settings | **done**    |
+| M1        | Organizations, note attachments                   | next        |
+| M2–M5     | Postgres · SQLite+Litestream · Static · Supabase  | not started |
+| M6        | Claude skill, docs, bootstrap round-trip          | not started |
 
-Three fixtures configure cleanly today — `_m0-turso-minimal`, `_m1-turso-auth`
-and `_m1-turso-internal` — and all three run in the matrix. The five named
-presets are wired in too and fail with `E_MISSING_VARIANT` until their milestone
-lands: listed rather than hidden, so the gap stays visible on every run.
+**`turso` is complete** — it configures, installs, passes check/lint/test/build
+and its smokes, and is a required lane in the matrix. Six staged fixtures run
+alongside it, from `_m0-turso-minimal` (database and host only) upward, so a
+regression points at the layer that broke.
+
+The other four named presets are wired into the matrix too and fail with
+`E_MISSING_VARIANT` until their milestone lands: listed rather than hidden, so
+the gap stays visible on every run.
 
 ## Docs
 

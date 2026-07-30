@@ -13,5 +13,5 @@ export interface NavItem {
 	/** Lower sorts first. */
 	order: number;
 	/** Hide unless the signed-in user has this role. */
-	role?: 'admin' | 'member';
+	role?: 'admin' | 'user';
 }

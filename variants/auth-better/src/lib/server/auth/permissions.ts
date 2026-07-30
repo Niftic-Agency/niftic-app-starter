@@ -10,7 +10,7 @@ import type { AuthUser } from './index';
  * that actually matters.
  */
 
-export type Role = 'admin' | 'member';
+export type Role = 'admin' | 'user';
 
 /** Throws a redirect to sign-in when there is no session. */
 export function requireUser(event: RequestEvent): AuthUser {
@@ -22,12 +22,12 @@ export function requireUser(event: RequestEvent): AuthUser {
 }
 
 export function roleOf(user: { role?: string | null }): Role {
-	return user.role === 'admin' ? 'admin' : 'member';
+	return user.role === 'admin' ? 'admin' : 'user';
 }
 
 export function hasRole(user: { role?: string | null }, role: Role): boolean {
-	// Admins pass every member check; members do not pass admin checks.
-	return role === 'member' ? true : roleOf(user) === 'admin';
+	// Admins pass every user-level check; plain users do not pass admin checks.
+	return role === 'user' ? true : roleOf(user) === 'admin';
 }
 
 /**

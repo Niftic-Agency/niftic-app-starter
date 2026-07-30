@@ -96,13 +96,17 @@ jobs:
             experimental: false
             e2e: true
             seed: true
+          - preset: _m1-turso-full # + the admin shell: the whole M1 spine
+            experimental: false
+            e2e: true
+            seed: true
+          - preset: turso # the shipped preset, now complete
+            experimental: false
+            e2e: true
+            seed: true
           # Land with their milestones. Wired now, and expected to fail with
           # E_MISSING_VARIANT until then — listed rather than omitted so the gap
           # is visible on every run instead of being quietly forgotten.
-          - preset: turso # M1 remainder: storage, admin, example
-            experimental: true
-            e2e: false
-            seed: false
           - preset: postgres # M2
             experimental: true
             e2e: false

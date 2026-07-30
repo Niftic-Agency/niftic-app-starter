@@ -1,0 +1,12 @@
+# M1 gate fixture: the complete turso spine — auth, uploads, admin, notes.
+name: M1 Full Smoke
+slug: m1-full-smoke
+description: The complete turso spine.
+visibility: client
+preset: turso
+authMode: client
+storage: r2
+admin: true
+example: true
+deployment:
+  productionUrl: https://m1-full.example.com

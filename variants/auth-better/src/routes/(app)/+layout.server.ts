@@ -17,7 +17,7 @@ export const load: LayoutServerLoad = async (event) => {
 			name: user.name,
 			email: user.email,
 			image: user.image ?? null,
-			role: user.role ?? 'member'
+			role: user.role ?? 'user'
 		}
 	};
 };
