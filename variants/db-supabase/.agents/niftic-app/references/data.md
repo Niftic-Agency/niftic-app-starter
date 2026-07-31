@@ -57,7 +57,15 @@ pnpm types:gen     # regenerate src/lib/database.types.ts
 
 Regenerate the types after every schema change and commit them with the
 migration. Committed types that disagree with the schema are worse than none:
-they are confidently wrong, and every editor believes them. CI diffs them.
+they are confidently wrong, and every editor believes them. CI regenerates and
+fails on any difference.
+
+`src/lib/database.types.ts` is that generator's output and nothing else — no
+header, no hand edits, because CI compares it byte for byte. Committed rather
+than generated at build time so a fresh checkout typechecks without a running
+database, and so a schema change nobody regenerated types for shows up as a diff
+in review. `types:gen` runs Prettier over the result, which is what lets the same
+file satisfy both `pnpm lint` and the drift check.
 
 ## Policy tests are not optional
 
