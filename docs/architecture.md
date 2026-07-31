@@ -346,6 +346,27 @@ rule but not the import rule, which a policy test must break on purpose — it
 holds a publishable key the way an attacker would, deliberately bypassing the
 app's own clients.
 
+## Where the milestones actually stand
+
+The three sections below were written before this repo had a remote, and each
+recorded what had never run. CI has since run them. Superseding notes, so the
+originals stay readable as the record of what was and was not known at the time:
+
+- **M2 — run and green.** `postgres-integration` applied the migrations, seeded,
+  and passed the smokes against a real `postgres:17` on the first run that got
+  past configure.
+- **M3 — run and green.** The `container` job completed the full acceptance
+  drill: boot on an empty volume, seed, WAL confirmed, redeploy with the data
+  intact, then the volume destroyed and the database restored from the
+  Litestream replica. It took three fixes to get there — migrations were never
+  generated into the build context, and `litestream.yml` was never copied into
+  the image, so the entrypoint had been taking the wrong branch since M3 landed.
+- **M5 — policy tests green, one hygiene check outstanding.** The policy suite
+  passes against the local stack, which is spec §14's acceptance criterion; it
+  needed table `grant`s first, without which every query was refused. The
+  types-drift check still fails: `database.types.ts` was hand-written and no
+  generator had seen the schema until now.
+
 ## What M2 has and has not been run against
 
 Recorded here because AGENTS.md's honesty clause requires it, and because the
