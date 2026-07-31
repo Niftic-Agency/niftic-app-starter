@@ -32,7 +32,9 @@ for (const name of files) {
 }
 
 if (findings.length === 0) {
-	console.log(`check:rls — ${files.length} migration(s), every table has RLS enabled.`);
+	console.log(
+		`check:rls — ${files.length} migration(s), every table has RLS enabled and privileges granted.`
+	);
 	process.exit(0);
 }
 
@@ -40,6 +42,6 @@ for (const finding of findings) {
 	console.error(`${finding.file}: ${finding.table} — ${finding.message}`);
 }
 console.error(
-	`\n${findings.length} table(s) without row level security. See supabase/policy-snippets.sql for the standard owner-only set.`
+	`\n${findings.length} unfinished table(s). See supabase/policy-snippets.sql for the standard owner-only set — RLS, policies AND the grant.`
 );
 process.exit(1);

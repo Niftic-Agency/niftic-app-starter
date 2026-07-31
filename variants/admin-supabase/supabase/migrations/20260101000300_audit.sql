@@ -22,3 +22,8 @@ create index audit_log_created_at_idx on audit_log (created_at desc);
 -- No policies whatsoever. Not an oversight: RLS denies by default, so with none
 -- defined, no token-bearing client can read or write this table. The admin
 -- screens read it through the service-role client.
+
+-- Deliberately NOT granted to anon or authenticated: no policies plus no
+-- privileges is the strongest form of "this table is not yours". The service
+-- role bypasses RLS but still needs the privilege, so it is granted explicitly.
+grant select, insert on audit_log to service_role;

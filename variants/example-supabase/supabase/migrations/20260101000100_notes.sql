@@ -60,3 +60,8 @@ $$;
 create trigger notes_touch_updated_at
   before update on notes
   for each row execute function touch_updated_at();
+
+-- Privileges, which policies do not imply. Without this the owner's own select
+-- fails with "permission denied for table notes" (42501) before any policy is
+-- consulted. The set matches the four policies above exactly.
+grant select, insert, update, delete on notes to authenticated;

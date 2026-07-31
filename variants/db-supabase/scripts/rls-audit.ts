@@ -39,6 +39,19 @@ const ENABLE_RLS =
 	/\balter\s+table\s+(?:if\s+exists\s+)?((?:"[^"]+"|[a-z0-9_]+)(?:\s*\.\s*(?:"[^"]+"|[a-z0-9_]+))?)\s+enable\s+row\s+level\s+security/gi;
 
 /**
+ * `grant … on <table> to <role>` — privileges, which policies do not imply.
+ *
+ * The second half of the same mistake. RLS filters rows within what a role may
+ * already touch, so a table with policies and no grant is refused at the table
+ * level before any policy is consulted: every query returns "permission denied"
+ * (42501), the owner's included. It reads as a policy bug and is not one, and
+ * worse, a test asserting that an attacker is REFUSED still passes — for the
+ * wrong reason.
+ */
+const GRANT_ON =
+	/\bgrant\s+[^;]*?\bon\s+(?:table\s+)?((?:"[^"]+"|[a-z0-9_]+)(?:\s*\.\s*(?:"[^"]+"|[a-z0-9_]+))?)\s+to\s+/gi;
+
+/**
  * Tables created in this migration that it does not also protect.
  *
  * Scoped to one file on purpose: "the RLS is in the next migration" is exactly
@@ -58,12 +71,32 @@ export function auditMigration(file: string, sql: string): Finding[] {
 		protectedTables.add(normalise(match[1]));
 	}
 
-	return [...created]
-		.filter((table) => !protectedTables.has(table))
-		.sort()
-		.map((table) => ({
-			file,
-			table,
-			message: `created without "alter table ${table} enable row level security" in the same migration`
-		}));
+	const granted = new Set<string>();
+	for (const match of cleaned.matchAll(GRANT_ON)) {
+		granted.add(normalise(match[1]));
+	}
+
+	const findings: Finding[] = [];
+	for (const table of [...created].sort()) {
+		if (!protectedTables.has(table)) {
+			findings.push({
+				file,
+				table,
+				message: `created without "alter table ${table} enable row level security" in the same migration`
+			});
+		}
+		// Deliberately "to anybody", not "to authenticated". A deny-all table like
+		// an audit log is legitimate — it grants to service_role and to nobody
+		// else — but a table granted to NO role is unusable by every client there
+		// is, which is never what anyone meant.
+		if (!granted.has(table)) {
+			findings.push({
+				file,
+				table,
+				message: `created without any "grant … on ${table} to …" — policies do not imply privileges, so every query would be refused with 42501`
+			});
+		}
+	}
+
+	return findings;
 }

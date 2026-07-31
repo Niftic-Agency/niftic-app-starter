@@ -79,3 +79,8 @@ create policy "assets: owners delete" on storage.objects
     and (storage.foldername(name))[1] = 'uploads'
     and (storage.foldername(name))[2] = (select auth.uid())::text
   );
+
+-- Privileges, which policies do not imply. The set matches the three policies on
+-- this table; there is no update, because an upload row is written once and then
+-- only read or removed.
+grant select, insert, delete on uploads to authenticated;

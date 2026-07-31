@@ -25,10 +25,24 @@ first. Never to make a policy problem go away.
 
 ## Adding a table
 
-Write one migration under `supabase/migrations/` that creates the table **and**
-enables row level security **and** adds its policies. `pnpm check:rls` fails a
-migration that creates a table without RLS in the same file, because the window
-between "table exists" and "table is protected" is the whole risk.
+Write one migration under `supabase/migrations/` that creates the table, enables
+row level security, adds its policies, **and grants privileges**. `pnpm
+check:rls` fails a migration missing either the RLS or the grant.
+
+Policies are only half of authorization. Postgres checks table privileges
+first, and RLS filters rows within what a role may already touch — so a table
+with perfect policies and no `grant` refuses every query, the owner's included,
+with `permission denied for table …` (42501). It reads like a policy bug and is
+not one, and a test asserting an attacker is refused will still pass, for the
+wrong reason. Grant exactly the verbs the policies contemplate:
+
+```sql
+grant select, insert, update, delete on notes to authenticated;
+```
+
+A table nobody but the server may touch — an audit log — grants to
+`service_role` and to no one else. The service role bypasses RLS; it does not
+bypass privileges.
 
 `supabase/policy-snippets.sql` carries the standard owner-only set — copy it and
 change the table name. Note `(select auth.uid())` rather than a bare

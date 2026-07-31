@@ -72,3 +72,14 @@ $$;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+-- Table PRIVILEGES, which are not the same thing as policies and are not implied
+-- by them. RLS filters rows within what a role may already touch; without a
+-- grant, Postgres refuses at the table level first and the policies are never
+-- consulted — every query comes back "permission denied for table profiles"
+-- (42501), owner or not. Granted here rather than relied upon from Supabase's
+-- default privileges, which depend on the role the migration happens to run as.
+grant select, update on profiles to authenticated;
+-- The admin screens list every profile and set roles, through the service-role
+-- client. It bypasses RLS; it does not bypass privileges.
+grant select, insert, update on profiles to service_role;

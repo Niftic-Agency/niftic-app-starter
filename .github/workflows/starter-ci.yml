@@ -642,7 +642,15 @@ jobs:
             sleep 1
           done
           echo "::error::the app never became healthy"
-          docker logs app
+          # Through ::error:: so it reaches the job's ANNOTATIONS, not only the
+          # raw log. The annotation is what a reviewer sees first, and it is the
+          # only part readable without permission to download logs.
+          code="$(curl -s -o /tmp/health.out -w '%{http_code}' "http://127.0.0.1:$APP_PORT/api/health" || true)"
+          echo "::error::last /api/health status: ${code:-no response}"
+          echo "::error::body: $(head -c 300 /tmp/health.out 2>/dev/null | tr '\n' ' ')"
+          docker logs app 2>&1 | tail -15 | while IFS= read -r line; do
+            echo "::error::app: $line"
+          done
           exit 1
           EOF
           chmod +x "$RUNNER_TEMP/run-app.sh"

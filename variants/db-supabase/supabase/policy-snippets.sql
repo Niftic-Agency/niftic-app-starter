@@ -11,9 +11,18 @@
 -- Postgres evaluate it once per statement instead of once per row, which is the
 -- difference between a policy you can put on a large table and one you cannot.
 
+-- Policies are only half of it. Postgres checks table PRIVILEGES first, and RLS
+-- filters rows within what a role may already touch — so a table with perfect
+-- policies and no `grant` refuses every query, the owner's included, with
+-- "permission denied for table …" (42501). It reads like a policy bug and is
+-- not one. Worse, a test asserting an attacker is REFUSED still passes, for the
+-- wrong reason. `pnpm check:rls` fails a created table that grants to nobody.
+
 -- ── owner-only: the default for anything user-scoped ────────────────────────
 
 alter table example enable row level security;
+
+grant select, insert, update, delete on example to authenticated;
 
 create policy "example: owners select" on example
   for select to authenticated

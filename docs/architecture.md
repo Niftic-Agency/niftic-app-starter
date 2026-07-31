@@ -509,6 +509,30 @@ for the wrong reason. It now searches both.
 schema's own comment refuses to give. The JSON path now strips the trap's error;
 genuine field errors still come back.
 
+## Policies are not privileges
+
+The first time a policy test ever queried these tables — run #5, the first run
+to reach that step — every one of them answered `permission denied for table
+notes` (42501), the owner's own select included. No migration on this branch
+contained a single `grant`.
+
+RLS filters rows **within** what a role may already touch. Postgres checks table
+privileges first, so a table with perfect policies and no grant refuses
+everything, and the refusal looks exactly like a policy bug. Supabase's default
+privileges did not cover it, which depends on the role migrations happen to run
+as — so the grants are now explicit in each migration, matching each table's
+policy surface verb for verb. `audit_log` grants to `service_role` alone: no
+policies plus no privileges is the strongest form of "not yours", and the
+service role bypasses RLS but not privileges.
+
+The nastier half is what this did to the tests. Of five policy tests, three
+passed — and the ones asserting that an attacker is REFUSED would have passed
+either way, because "refused by policy" and "refused for lack of privilege" are
+indistinguishable from the client. A green policy suite on an ungranted table
+proves nothing at all. `check:rls` now fails a created table that grants to
+nobody, which is the cheapest place to catch it: it reads SQL, needs no
+database, and runs before anything is applied.
+
 ## What M7 has and has not been run against
 
 Verified by running it, on all five presets: configure, install, check, lint,
