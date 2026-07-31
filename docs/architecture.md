@@ -533,6 +533,36 @@ proves nothing at all. `check:rls` now fails a created table that grants to
 nobody, which is the cheapest place to catch it: it reads SQL, needs no
 database, and runs before anything is applied.
 
+## The image took the wrong branch, quietly
+
+The container's first boot died on:
+
+    ConnectionFailed("Unable to open connection to local database ./.data/dev.db: 14")
+
+`./.data/dev.db` is `db-connect.ts`'s local-development fallback, which means
+`TURSO_DATABASE_URL` was never set — which means the entrypoint never took its
+sqlite branch. That branch is gated on `[ -f /app/litestream.yml ]`, and the
+runner stage never copied the file.
+
+A missing `COPY` here does not fail a build; it changes behaviour. The image
+booted, took the postgres-on-Dokploy path, and would have run with no restore
+and no replication at all had the database opened. The whole Litestream story
+was inert in the image, and only a boot on an empty volume could show it.
+
+Two changes, because either alone leaves the trap:
+
+- The Dockerfile copies it optionally — `COPY --from=build /app/package.json
+/app/litestream.ym[l] ./`. The bracket glob matches the file on the sqlite
+  profile and nothing on postgres, and package.json keeps the instruction legal
+  in the second case. One Dockerfile still serves both hosts.
+- The entrypoint refuses to start when `DB_PATH` is set and `litestream.yml` is
+  absent. That combination is not "a different profile", it is a broken image,
+  and it should say so rather than migrate the wrong database.
+
+`SQLITE_CANTOPEN` naming a path nobody configured is the tell for this class:
+the value came from a fallback, so the variable was never set, so the branch
+that sets it never ran.
+
 ## What M7 has and has not been run against
 
 Verified by running it, on all five presets: configure, install, check, lint,

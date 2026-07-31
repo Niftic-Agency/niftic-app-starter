@@ -37,6 +37,16 @@ if [ -f /app/litestream.yml ]; then
 	exec litestream replicate -config /app/litestream.yml -exec "node build/index.js"
 fi
 
+# Reaching here means there is no litestream.yml. On the sqlite profile that is
+# a broken image rather than a different profile — DB_PATH is how the platform
+# says "your database is a file on this volume" — and carrying on would migrate
+# the wrong database and start with no replication at all. Say so instead.
+if [ -n "${DB_PATH:-}" ]; then
+	echo "DB_PATH is set but /app/litestream.yml is missing from this image." >&2
+	echo "It was not built for the sqlite profile; refusing to start on the wrong branch." >&2
+	exit 1
+fi
+
 # ── everything else on this host: migrate, then start ────────────────────────
 echo "migrate: applying migrations"
 $MIGRATE

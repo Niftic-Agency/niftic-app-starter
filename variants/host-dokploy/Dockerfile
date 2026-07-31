@@ -64,7 +64,13 @@ RUN apt-get update \
 # was a lie in the manifest.
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
-COPY --from=build /app/package.json ./package.json
+# `litestream.yml` ships only on the sqlite profile, and the entrypoint branches
+# on whether it exists. Leaving it out does not fail the build — it silently
+# takes the OTHER branch: no restore, no replication, and TURSO_DATABASE_URL
+# never exported, so the app opens the dev fallback path and dies on
+# SQLITE_CANTOPEN. The bracket glob makes the file optional (it matches when
+# present and nothing when absent); package.json keeps the COPY legal either way.
+COPY --from=build /app/package.json /app/litestream.ym[l] ./
 # Migrations, the script that applies them, and the schema modules that script
 # imports. Nothing else from src reaches the runner.
 COPY --from=build /app/drizzle ./drizzle

@@ -830,8 +830,16 @@ jobs:
           # they are confidently wrong, and every editor believes them.
           cp src/lib/database.types.ts /tmp/types-committed.ts
           pnpm types:gen
-          if ! diff -u /tmp/types-committed.ts src/lib/database.types.ts; then
+          if ! diff -u /tmp/types-committed.ts src/lib/database.types.ts > /tmp/types.diff; then
+            cat /tmp/types.diff
             echo "::error::src/lib/database.types.ts is stale — run pnpm types:gen and commit"
+            # Through ::error:: as well, so the diff reaches the ANNOTATIONS. The
+            # generator only runs against a live stack, so for anyone without one
+            # this is the only copy of the answer they can get at. Capped, because
+            # a whole regenerated file is not an annotation.
+            head -60 /tmp/types.diff | while IFS= read -r line; do
+              echo "::error::types: $line"
+            done
             exit 1
           fi
 
