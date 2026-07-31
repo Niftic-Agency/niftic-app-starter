@@ -856,16 +856,28 @@ jobs:
           if ! diff -u /tmp/types-committed.ts src/lib/database.types.ts > /tmp/types.diff; then
             cat /tmp/types.diff
             echo "::error::src/lib/database.types.ts is stale — run pnpm types:gen and commit"
-            # The generated file itself, as ONE annotation.
+            # The generated file itself, compressed, as annotations.
             #
             # `types:gen` only runs against a live stack, so whoever sees this
             # failure may have no way to produce the file themselves — and the
-            # artifact below needs permission to download. An annotation needs
-            # none. One annotation rather than one per line because GitHub caps
-            # the COUNT at ten per step but allows 64KB in a single message, and
-            # a per-line version silently loses everything after the tenth.
-            escaped="$(sed -e 's/%/%25/g' -e 's/\r/%0D/g' src/lib/database.types.ts | awk '{printf "%s%%0A", $0}')"
-            echo "::error title=regenerated database.types.ts::${escaped}"
+            # artifact below needs permission to download, which an annotation
+            # does not. Two limits shape this: a message is truncated at 4096
+            # characters, and a step may emit ten annotations. Raw text hit the
+            # first (a 19KB file arrived a third complete); one line per
+            # annotation hit the second. gzip+base64 fits this file in one or two
+            # messages, because generated types repeat Row/Insert/Update three
+            # times per table and compress about eight to one.
+            #
+            #   printf '%s' "<joined parts>" | base64 -d | gunzip > src/lib/database.types.ts
+            payload="$(gzip -9c src/lib/database.types.ts | base64 | tr -d '\n')"
+            echo "::error::database.types.ts follows as gzip+base64 in $(( (${#payload} + 3499) / 3500 )) part(s), ${#payload} chars"
+            offset=1
+            part=1
+            while [ "$offset" -le "${#payload}" ]; do
+              echo "::error title=types.gz part ${part}::$(printf '%s' "$payload" | cut -c "${offset}-$((offset + 3499))")"
+              offset=$((offset + 3500))
+              part=$((part + 1))
+            done
             exit 1
           fi
 
