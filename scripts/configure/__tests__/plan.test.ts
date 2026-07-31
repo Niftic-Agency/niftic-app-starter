@@ -196,25 +196,43 @@ describe('buildPlan', () => {
 		// Both describe machinery that configure deletes: architecture.md documents
 		// the engine, and setup.md is an interview that can never run again.
 		expect(pruned).toContain('docs/architecture.md');
-		expect(pruned).toContain('.claude/skills/niftic-app/references/setup.md');
-		// The skill itself stays. It is the app's, not the starter's.
+		expect(pruned).toContain('.agents/niftic-app/references/setup.md');
+		// The guide and its Claude adapter stay. They are the app's, not the
+		// starter's.
+		expect(pruned).not.toContain('.agents/niftic-app/GUIDE.md');
 		expect(pruned).not.toContain('.claude/skills/niftic-app/SKILL.md');
 	});
 
-	it("rewrites CLAUDE.md rather than shipping the starter's orientation", async () => {
+	it('rewrites the orientation for both agent conventions, without writing it twice', async () => {
 		const result = await planFor(manifest({ preset: 'turso' }));
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 
 		const generated = result.value.ops.filter((op) => op.kind === 'generate').map((op) => op.to);
+		expect(generated).toContain('AGENTS.md');
 		expect(generated).toContain('CLAUDE.md');
+		// The third file that would otherwise still call itself a template.
+		expect(generated).toContain('README.md');
+		expect(generate('readme', result.value, {})).not.toContain('pnpm configure');
+
+		// AGENTS.md carries the content; CLAUDE.md carries a pointer. Two copies
+		// of the rules would mean two things to maintain and one to go stale, so
+		// the pointer must stay short and must name where it is pointing.
+		const agents = generate('agents-md', result.value, {});
+		const claude = generate('claude-md', result.value, {});
+		expect(agents).toContain('## Rules that hold everywhere');
+		expect(claude).not.toContain('## Rules that hold everywhere');
+		expect(claude).toContain('AGENTS.md');
+		expect(claude.split('\n').length).toBeLessThan(20);
+
+		// Both point at the one guide, and neither is the guide.
+		expect(agents).toContain('.agents/niftic-app/GUIDE.md');
+		expect(claude).toContain('.agents/niftic-app/GUIDE.md');
 	});
 
 	it('ships one branch reference per axis, from the variant that owns it', async () => {
 		const reference = (ops: { kind: string; to?: string; from?: string }[], name: string) =>
-			ops.find(
-				(op) => op.kind === 'copy' && op.to === `.claude/skills/niftic-app/references/${name}`
-			);
+			ops.find((op) => op.kind === 'copy' && op.to === `.agents/niftic-app/references/${name}`);
 
 		const turso = await planFor(manifest({ preset: 'turso' }));
 		const supabase = await planFor(manifest({ preset: 'supabase' }));
@@ -224,13 +242,13 @@ describe('buildPlan', () => {
 
 		// Each branch teaches its own stack and nobody else's.
 		expect(reference(turso.value.ops, 'data.md')).toMatchObject({
-			from: 'variants/db-drizzle-turso/.claude/skills/niftic-app/references/data.md'
+			from: 'variants/db-drizzle-turso/.agents/niftic-app/references/data.md'
 		});
 		expect(reference(supabase.value.ops, 'data.md')).toMatchObject({
-			from: 'variants/db-supabase/.claude/skills/niftic-app/references/data.md'
+			from: 'variants/db-supabase/.agents/niftic-app/references/data.md'
 		});
 		expect(reference(turso.value.ops, 'auth.md')).toMatchObject({
-			from: 'variants/auth-better/.claude/skills/niftic-app/references/auth.md'
+			from: 'variants/auth-better/.agents/niftic-app/references/auth.md'
 		});
 
 		// A static app has no database and no auth, so it is taught neither.
@@ -245,9 +263,7 @@ describe('buildPlan', () => {
 		if (!on.ok || !off.ok) return;
 
 		const orgsDoc = (ops: { kind: string; to?: string }[]) =>
-			ops.some(
-				(op) => op.kind === 'copy' && op.to === '.claude/skills/niftic-app/references/orgs.md'
-			);
+			ops.some((op) => op.kind === 'copy' && op.to === '.agents/niftic-app/references/orgs.md');
 
 		expect(orgsDoc(on.value.ops)).toBe(true);
 		expect(orgsDoc(off.value.ops)).toBe(false);

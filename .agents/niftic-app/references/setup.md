@@ -12,7 +12,7 @@ the profile is not, so spend the time there.
 | Field                         | Ask                                                              |
 | ----------------------------- | ---------------------------------------------------------------- |
 | `name`, `slug`                | Display name; slug defaults to a kebab-cased name                |
-| `description`                 | One line — it lands in `CLAUDE.md` and the app config            |
+| `description`                 | One line — it lands in `AGENTS.md` and the app config            |
 | `visibility`                  | `internal` (Niftic staff) or `client`                            |
 | `preset`                      | The profile — see the tradeoffs below                            |
 | `authMode`                    | `internal`: Google, domain-restricted · `client`: email/password |

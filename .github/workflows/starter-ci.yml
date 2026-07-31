@@ -158,12 +158,14 @@ jobs:
 
           grep -qE '^generated:' niftic.app.yml
           test -f .github/workflows/ci.yml
+          test -f AGENTS.md
+          test -f .agents/niftic-app/GUIDE.md
           test -f .claude/skills/niftic-app/SKILL.md
           # The configuring commit is also the one that removes the bootstrapper,
           # so the repo it lands in cannot be bootstrapped a second time.
           for p in variants scripts/configure \
                    .github/workflows/bootstrap.yml .github/workflows/starter-ci.yml \
-                   docs/architecture.md .claude/skills/niftic-app/references/setup.md; do
+                   docs/architecture.md .agents/niftic-app/references/setup.md; do
             if [ -e "$p" ]; then echo "::error::$p survived the bootstrap"; exit 1; fi
           done
 
@@ -363,31 +365,52 @@ jobs:
           for p in variants scripts/configure \
                    .github/workflows/starter-ci.yml .github/workflows/bootstrap.yml \
                    docs/architecture.md \
-                   .claude/skills/niftic-app/references/setup.md; do
+                   .agents/niftic-app/references/setup.md; do
             if [ -e "$p" ]; then echo "::error::$p survived configure"; exit 1; fi
           done
           if grep -q '"configure"' package.json; then
             echo "::error::the configure script survived in package.json"; exit 1
           fi
 
-      - name: The skill shipped, and teaches only this app's stack
+      - name: Every agent has an entry point, and it teaches only this app's stack
         working-directory: ${{ runner.temp }}/app
         run: |
           set -euo pipefail
+          # The vendor-neutral pair, plus the adapters that point at it.
+          test -f AGENTS.md
+          test -f CLAUDE.md
+          test -f .github/copilot-instructions.md
+          test -f .agents/niftic-app/GUIDE.md
           test -f .claude/skills/niftic-app/SKILL.md
-          # CLAUDE.md is regenerated, so it must not still be describing a
+
+          # AGENTS.md is regenerated, so it must not still be describing a
           # superset and a configure engine that no longer exist.
-          if grep -qi 'variants/\|pnpm configure' CLAUDE.md; then
-            echo "::error::CLAUDE.md is still the starter's"; exit 1
+          for f in AGENTS.md README.md; do
+            if grep -qi 'variants/\|pnpm configure' "$f"; then
+              echo "::error::$f is still the starter's"; exit 1
+            fi
+          done
+          # CLAUDE.md is a pointer, not a second copy. If it grows the rules
+          # back, they are being maintained twice and one of them will go stale.
+          if ! grep -q 'AGENTS.md' CLAUDE.md; then
+            echo "::error::CLAUDE.md does not point at AGENTS.md"; exit 1
           fi
+          if [ "$(wc -l < CLAUDE.md)" -gt 20 ]; then
+            echo "::error::CLAUDE.md is longer than a pointer needs to be"; exit 1
+          fi
+          # Same for the skill: its job is to route to the guide, not restate it.
+          if ! grep -q '.agents/niftic-app/GUIDE.md' .claude/skills/niftic-app/SKILL.md; then
+            echo "::error::the skill does not point at the shared guide"; exit 1
+          fi
+
           # References arrive with the variant that owns them. Nothing from
           # another branch may be present.
-          echo "references: $(ls .claude/skills/niftic-app/references 2>/dev/null | tr '\n' ' ')"
+          echo "references: $(ls .agents/niftic-app/references 2>/dev/null | tr '\n' ' ')"
           case "${{ matrix.preset }}" in
             static)
-              test -f .claude/skills/niftic-app/references/static.md
+              test -f .agents/niftic-app/references/static.md
               for taught in data.md auth.md orgs.md; do
-                if [ -e ".claude/skills/niftic-app/references/$taught" ]; then
+                if [ -e ".agents/niftic-app/references/$taught" ]; then
                   echo "::error::a static app was taught $taught"; exit 1
                 fi
               done
@@ -395,11 +418,11 @@ jobs:
             supabase)
               # The fork's whole security model. If this sentence is missing, the
               # app shipped the Drizzle reference or none at all.
-              grep -q 'row level security' .claude/skills/niftic-app/references/data.md
+              grep -q 'row level security' .agents/niftic-app/references/data.md
               ;;
             *)
-              test -f .claude/skills/niftic-app/references/data.md
-              if grep -q 'row level security' .claude/skills/niftic-app/references/data.md; then
+              test -f .agents/niftic-app/references/data.md
+              if grep -q 'row level security' .agents/niftic-app/references/data.md; then
                 echo "::error::a Drizzle app shipped the Supabase reference"; exit 1
               fi
               ;;

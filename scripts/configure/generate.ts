@@ -327,18 +327,22 @@ ${body}
 `;
 }
 
-// ─── CLAUDE.md ───────────────────────────────────────────────────────────────
+// ─── AGENTS.md ───────────────────────────────────────────────────────────────
 
 /**
  * The generated app's orientation page: one screen of stack, commands and layout,
- * pointing at the skill for everything else.
+ * pointing at the guide for everything else.
+ *
+ * `AGENTS.md` and not `CLAUDE.md`, because every agent but one finds this name by
+ * convention and the one that doesn't gets a pointer. One file, one copy of each
+ * rule, whichever tool is reading.
  *
  * The commands come from the merged package.json rather than a hand-kept list,
- * because a CLAUDE.md that names a script the app does not have is worse than no
- * CLAUDE.md at all — the agent runs it, it fails, and the file loses its
- * authority for everything else on the page.
+ * because a file that names a script the app does not have is worse than no file
+ * at all — the agent runs it, it fails, and the page loses its authority for
+ * everything else on it.
  */
-function claudeMd(plan: Plan): string {
+function agentsMd(plan: Plan): string {
 	const { manifest, profile, capabilities, dialect } = plan.resolved;
 
 	const stack: string[] = [
@@ -443,8 +447,13 @@ function claudeMd(plan: Plan): string {
 ${manifest.description}
 
 Generated from [niftic-app-starter](https://github.com/Niftic-Agency/niftic-app-starter) —
-the **${profile}** profile. Detailed rules and workflows live in the \`niftic-app\`
-skill (\`.claude/skills/niftic-app/\`). Read that before adding features.
+the **${profile}** profile.
+
+Workflows for adding anything — a resource, a role, an admin screen, an upload,
+an email — live in [.agents/niftic-app/GUIDE.md](.agents/niftic-app/GUIDE.md).
+Read that before adding features, whichever agent you are. Claude Code reaches
+it through the \`niftic-app\` skill, which points at the same file; \`CLAUDE.md\`
+points at this one. Every rule has exactly one home.
 
 ## Stack
 
@@ -475,6 +484,99 @@ code but not the running app, write "verified in code, not in browser".
 `;
 }
 
+// ─── CLAUDE.md ───────────────────────────────────────────────────────────────
+
+/**
+ * A pointer, not a page.
+ *
+ * Claude Code looks for this filename; every other agent looks for `AGENTS.md`.
+ * Writing the orientation twice would mean maintaining it twice, and the copy
+ * nobody edits is the one that eventually lies — so this file's whole job is to
+ * send the reader one directory over.
+ */
+function claudeMd(plan: Plan): string {
+	return `# ${plan.resolved.manifest.name}
+
+Read [AGENTS.md](AGENTS.md). It is the orientation for this app and it is not
+Claude-specific — stack, commands, layout, and the rules that hold everywhere.
+
+Workflows for adding anything live in
+[.agents/niftic-app/GUIDE.md](.agents/niftic-app/GUIDE.md), which the
+\`niftic-app\` skill points at too.
+
+This file exists only because Claude Code looks for this name. Everything it
+would say is in the two files above, deliberately once.
+`;
+}
+
+// ─── README.md ───────────────────────────────────────────────────────────────
+
+/**
+ * The human's first screen, and the third file that would otherwise arrive still
+ * describing the template it came from — a repo whose README opens "a template
+ * that produces every kind of app" teaches everyone who clones it the wrong
+ * thing about what they are holding.
+ *
+ * Short on purpose. AGENTS.md carries the rules and the layout; duplicating them
+ * here would mean two files to keep true.
+ */
+function readme(plan: Plan): string {
+	const { manifest, profile, capabilities } = plan.resolved;
+	const has = (name: string) => name in plan.packageJson.scripts;
+
+	const start = ['pnpm install', 'cp .env.example .env   # then fill it in'];
+	if (has('db:migrate')) start.push('pnpm db:migrate');
+	if (has('db:seed')) start.push('pnpm db:seed');
+	if (has('db:start')) start.push('pnpm db:start          # the local Supabase stack');
+	if (has('db:reset')) start.push('pnpm db:reset');
+	start.push('pnpm dev');
+
+	const docs = ['- [AGENTS.md](AGENTS.md) — stack, commands, layout, and the rules that hold.'];
+	docs.push(
+		'- [.agents/niftic-app/GUIDE.md](.agents/niftic-app/GUIDE.md) — how to add a\n  resource, a role, an upload, an email.'
+	);
+	if (manifest.host === 'dokploy')
+		docs.push('- [docs/deploy-dokploy.md](docs/deploy-dokploy.md) — the deploy runbook.');
+	if (manifest.data === 'postgres')
+		docs.push('- [docs/postgres-pooling.md](docs/postgres-pooling.md) — connection rules.');
+	if (manifest.data === 'sqlite')
+		docs.push(
+			'- [docs/sqlite-litestream.md](docs/sqlite-litestream.md) — replication and\n  the restore drill.'
+		);
+
+	return `# ${manifest.name}
+
+${manifest.description}
+
+## Getting started
+
+\`\`\`bash
+${start.join('\n')}
+\`\`\`
+
+\`.env.example\` lists every variable this app needs, with a note on each.
+${capabilities.email ? 'Set `EMAIL_DRY_RUN=true` locally and mail is logged rather than sent.\n' : ''}
+Health is at \`/api/health\`, and it reports each dependency separately.
+
+## Checks
+
+\`\`\`bash
+pnpm check && pnpm lint && pnpm test:unit
+pnpm test:e2e
+\`\`\`
+
+## Where to read next
+
+${docs.join('\n')}
+
+---
+
+Generated from
+[niftic-app-starter](https://github.com/Niftic-Agency/niftic-app-starter) — the
+**${profile}** profile.
+`;
+}
+
 // ─── dispatch ────────────────────────────────────────────────────────────────
 
 export function generate(
@@ -495,8 +597,12 @@ export function generate(
 			return svelteConfig(plan);
 		case 'db-schema':
 			return dbSchema(plan);
+		case 'agents-md':
+			return agentsMd(plan);
 		case 'claude-md':
 			return claudeMd(plan);
+		case 'readme':
+			return readme(plan);
 		case 'registry:hooks':
 			return registryModule(plan.registries, {
 				registry: 'hooks',

@@ -348,7 +348,7 @@ app's own clients.
 
 ## What M2 has and has not been run against
 
-Recorded here because CLAUDE.md's honesty clause requires it, and because the
+Recorded here because AGENTS.md's honesty clause requires it, and because the
 next person will otherwise assume the matrix is green.
 
 Verified locally: configure, `pnpm check` (0 errors), lint, unit tests including
@@ -402,6 +402,41 @@ The `supabase-integration` job covers the rest: `check:rls` against real
 migrations, a proof that `check:rls` still FAILS a bad one, `supabase start` and
 `db reset`, the types-drift check, and the policy tests. It has not executed.
 
+## One set of instructions, several agents
+
+The guidance is not Claude's. It lives in `AGENTS.md` and
+`.agents/niftic-app/GUIDE.md`, and the two Claude-shaped files are pointers:
+
+```
+AGENTS.md                        what the app is — generated per profile
+.agents/niftic-app/GUIDE.md      how to change it — static, references pruned
+CLAUDE.md                        → AGENTS.md          (generated)
+.claude/skills/niftic-app/       → GUIDE.md           (static, keeps the trigger)
+```
+
+The split is by _job_, not by vendor. `AGENTS.md` is generated because it
+describes one profile's stack and commands; the guide is static because the
+procedures are the same everywhere and only its `references/` vary. Claude's
+skill keeps its frontmatter — the pushy description is what makes it fire on
+"add a projects page" — and its body is four lines that send the agent to the
+guide. Every other tool arrives at the same file by reading `AGENTS.md`.
+
+`.github/copilot-instructions.md` is a third pointer, and the only one that
+earns its keep beyond Claude: Copilot does not read `AGENTS.md`, while Cursor,
+Codex, Aider, Jules and Gemini CLI all do — for those, adding a file would be
+adding a thing to maintain in exchange for nothing.
+
+No pointer carries a rule of its own. CI asserts they stay that way: `CLAUDE.md`
+must name `AGENTS.md`, must not carry the rules section, and must stay under
+twenty lines. A pointer that grows content is two copies of a rule, and the copy
+nobody edits is the one that starts lying.
+
+`README.md` joined `AGENTS.md` and `CLAUDE.md` as generated for the same reason
+all three needed it — the starter's own opens "a template that produces every
+kind of app", which is exactly wrong in the repo that template produced. It was
+found by the grill's own lint step and is the third instance of one bug: a file
+about the generator shipping into the generated thing.
+
 ## The skill is pruned by the same machinery as the code
 
 Spec §9 says configure prunes the skill references that do not apply. It is
@@ -409,7 +444,7 @@ worth writing down how, because the mechanism is not the one the plan assumed.
 
 The plan expected base to carry every reference and the engine to delete the
 irrelevant ones by directory. Instead each reference **ships from the variant
-that owns it** — `variants/db-supabase/.claude/skills/niftic-app/references/data.md`
+that owns it** — `variants/db-supabase/.agents/niftic-app/references/data.md`
 and so on — so the copy pass that already decides which code a profile gets
 decides which prose it gets too. There is no second list to keep in sync with
 the first, and adding a variant cannot forget to teach its own rules. It also
@@ -428,11 +463,11 @@ dead parts inert: a procedure whose reference was pruned is a procedure this app
 has no use for. The static profile, where most of them are dead at once, ships a
 `static.md` that says what the profile _is_ instead of listing what it lacks.
 
-`CLAUDE.md` could not take the same route. The starter's own describes a
+`AGENTS.md` could not take the same route. The starter's own describes a
 superset and a configure engine, which is exactly wrong for a generated app, so
 it is the ninth generator: profile, stack, layout and rules assembled from the
 resolved manifest, and the command list read from the merged `package.json`
-rather than hand-kept — a CLAUDE.md that names a script the app does not have
+rather than hand-kept — an AGENTS.md that names a script the app does not have
 teaches the agent to distrust the rest of the page.
 
 ## What M6 has and has not been run against
@@ -447,7 +482,7 @@ skill, and carries none of `variants/`, the engine, either starter workflow,
 the guard. The same sequence runs in CI as the `bootstrap` job.
 
 Also verified locally: turso, supabase and static configure with the right
-references present and no others, and the generated `CLAUDE.md` describes the
+references present and no others, and the generated `AGENTS.md` describes the
 app rather than the starter.
 
 **Never run:** a real `workflow_dispatch`. That needs the repo marked as a

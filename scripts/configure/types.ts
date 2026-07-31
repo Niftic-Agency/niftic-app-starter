@@ -214,11 +214,18 @@ export type GeneratorId =
 	 */
 	| 'db-schema'
 	/**
-	 * The generated app's orientation page. The starter's own CLAUDE.md describes
-	 * a superset and a configure engine that no longer exist by the time anyone
-	 * reads it, so it is rewritten rather than shipped.
+	 * The generated app's orientation page. The starter's own describes a superset
+	 * and a configure engine that no longer exist by the time anyone reads it, so
+	 * it is rewritten rather than shipped.
+	 *
+	 * `AGENTS.md` is the file with the content, because every agent but one finds
+	 * it by convention; `CLAUDE.md` is a pointer to it, because Claude Code looks
+	 * for that name and a second copy of a rule is a copy that goes stale.
 	 */
-	| 'claude-md';
+	| 'agents-md'
+	| 'claude-md'
+	/** Same reason as the two above: the starter's README calls itself a template. */
+	| 'readme';
 
 /**
  * Phase ordering. Variant-declared removals precede copies so remove/copy always
